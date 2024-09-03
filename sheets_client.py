@@ -31,7 +31,8 @@ class SheetsClient:
             template_worksheet = sh.worksheet("leer")
             new_worksheet = sh.duplicate_sheet(source_sheet_id=template_worksheet.id, insert_sheet_index=2,
                                                new_sheet_name=worksheet_title)
-            new_worksheet.update_acell("B1:O1", f"KW {week_number}{date.strftime('%y')} - {date - timedelta(days=date.weekday()):%d.%m.%Y} - {date + timedelta(days=6-date.weekday()):%d.%m.%Y}")
+            new_worksheet.update_acell("B1:O1",
+                                       f"KW {week_number}{date.strftime('%y')} - {date - timedelta(days=date.weekday()):%d.%m.%Y} - {date + timedelta(days=6 - date.weekday()):%d.%m.%Y}")
         else:
             new_worksheet = existing_worksheet
 
@@ -56,16 +57,17 @@ class SheetsClient:
         else:
             raise ValueError("Ungültiger Typ")
 
-        # Update the cell
-        new_worksheet.update_acell(cell, text)
+        existing_value = new_worksheet.acell(cell).value
+        if existing_value:
+            new_worksheet.update_acell(cell, f"{existing_value}\n{text}")
+        else:
+            new_worksheet.update_acell(cell, text)
 
 
 def main():
     client = SheetsClient()
 
-    date = datetime(2024, 6, 27, 15, 0)
-
-    client.set_new_Entry(type="description", date=date, text="TesT")
+    client.set_new_Entry(type="description", date_str="2024-06-27T15:00:00Z", text="Number2")
     #print(client.get_first_not_completed_day())
 
 if __name__ == "__main__":

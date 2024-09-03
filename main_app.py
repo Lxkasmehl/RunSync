@@ -17,9 +17,6 @@ def main():
 
     activities = [activity for activity in activities if activity['sport_type'] != 'Yoga']
 
-    for i, activity in enumerate(activities):
-        print(f"Aktivität {i + 1}: {activity['sport_type']}")
-
     for i, activity in enumerate(reversed(activities)):
         activityDetails = strava_client.get_strava_data_for_activity_with_specific_ID(activity_id=activity['id'],
                                                                                       include_efforts=False)
