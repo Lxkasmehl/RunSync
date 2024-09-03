@@ -112,19 +112,3 @@ class StravaClient:
                     f"{self.athlete_activities_url}?before={end_timestamp}&after={start_timestamp}&page=1&per_page=200")
                 response.raise_for_status()
         return response.json()
-
-def main():
-    # Create Strava client instance
-    client = StravaClient()
-
-    # Get data for specific activity ID
-    data1 = client.get_strava_data_for_activity_with_specific_ID(12283718987, False)
-    print(f"Private Notes: {data1.get('private_note')}")
-
-    # Get all activities in a specific timeframe
-    data2 = client.get_all_activities_in_timeframe("2024-08-20 00:00:00", "2024-08-31 23:59:59")
-    for i, activity in enumerate(data2):
-        print(f"Aktivität {i + 1}: {activity['name']}")
-
-if __name__ == "__main__":
-    main()
