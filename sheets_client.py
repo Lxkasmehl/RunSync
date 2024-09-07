@@ -1,15 +1,20 @@
 import locale
+import os
 import time
 from datetime import datetime, timedelta
 
 import gspread
 import math
 
+from dotenv import load_dotenv
 from gspread.exceptions import APIError
 from gspread.utils import Dimension
 
-sa = gspread.service_account(filename="%APPDATA%/gspread/service_account.jso")
-sh = sa.open("Trainingsprotokoll Lukas Mehl")
+# Load environment variables from .env file
+load_dotenv()
+
+sa = gspread.service_account(filename=os.getenv('FILE_PATH'))
+sh = sa.open(os.getenv('DOCUMENT_NAME'))
 
 locale.setlocale(locale.LC_ALL, 'de_DE')  # Set the locale to German
 
