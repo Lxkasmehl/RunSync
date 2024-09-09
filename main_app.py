@@ -1,6 +1,16 @@
+import time
 from datetime import datetime
+
+from selenium.common import TimeoutException
+from selenium.webdriver import Keys
+
+from garmin_client import GarminClient
 from strava_client import StravaClient
 from sheets_client import SheetsClient
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import undetected_chromedriver as uc
 
 def get_first_not_completed_day(sheets_client):
     """
@@ -109,17 +119,9 @@ def update_p4_p7_worksheets(sheets_client, strava_client):
             # Update the P4 cell with the workout count
             ws.update_acell('P4', workout_count)
 
-def main():
-    """
-    The main function of the script.
-    """
-    # Create instances of the StravaClient and SheetsClient classes
-    strava_client = StravaClient()
-    sheets_client = SheetsClient()
-
+def update_activities_since_first_not_completed_day(sheets_client, strava_client):
     # Get the first not completed day
     first_not_completed_day = get_first_not_completed_day(sheets_client)
-    print(f"Erster nicht ausgefüllter Tag: {first_not_completed_day.strftime('%Y-%m-%d')}")
 
     # Get the current date
     today = datetime.now()
@@ -133,8 +135,42 @@ def main():
     # Update the sheets with activity details
     update_sheets_with_activity_details(sheets_client, strava_client, activities)
 
-    # Update the P4 and P7 worksheets
-    update_p4_p7_worksheets(sheets_client, strava_client)
+def transfer_all_activities_not_yet_transferred_from_Strava_to_Garmin(strava_client, garmin_client, driver, wait):
+    garmin_client.login(driver, wait)
+    garmin_client.open_activity_overview(driver, wait)
+
+    i = 0
+
+    while True:
+        elementsList = garmin_client.get_all_activities_displayed_in_overview(driver, wait)
+
+        if i >= len(elementsList):
+            break
+
+        date = garmin_client.open_activity_in_new_tab_and_get_date(driver, wait, elementsList[i])
+        print(date)
+
+        driver.close()
+        driver.switch_to.window(driver.window_handles[-1])
+        i += 1
+
+def main():
+    """
+    The main function of the script.
+    """
+    # Create instances of the StravaClient and SheetsClient classes
+    strava_client = StravaClient()
+    sheets_client = SheetsClient()
+    garmin_client = GarminClient()
+
+    driver = uc.Chrome(headless=False, use_subprocess=False)
+    wait = WebDriverWait(driver, 20)
+
+    #update_activities_since_first_not_completed_day(sheets_client, strava_client)
+
+    #update_p4_p7_worksheets(sheets_client, strava_client)
+
+    transfer_all_activities_not_yet_transferred_from_Strava_to_Garmin(strava_client, garmin_client, driver, wait)
 
 
 if __name__ == "__main__":
