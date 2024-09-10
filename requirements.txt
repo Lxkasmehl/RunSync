@@ -1,0 +1,10 @@
+requests
+requests-oauthlib
+oauthlib
+google-api-python-client
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+selenium
+undetected-chromedriver
+python-dotenv
