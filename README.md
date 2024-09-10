@@ -1,8 +1,8 @@
-Overview
+# Overview
 
 This project is a Python script that integrates with Strava, Garmin, and Google Sheets to automate the process of tracking and logging workouts. The script uses the Strava API to retrieve activity details, transfers these activities to Garmin using Selenium, and updates a Google Sheets spreadsheet with the collected data.
 
-Components
+# Components
 
 The project consists of three main components:
 
@@ -10,7 +10,7 @@ The project consists of three main components:
 * Garmin Client: A Python class that uses Selenium to interact with the Garmin website and transfer activities.
 * Sheets Client: A Python class that interacts with the Google Sheets API to update a spreadsheet with the collected data.
 
-Functionality
+# Functionality
 
 The script performs the following tasks:
 
@@ -18,7 +18,7 @@ Retrieves activity details from Strava
 Transfers activities from Strava to Garmin using Selenium
 Updates a Google Sheets spreadsheet with the collected data
 
-Usage
+# Usage
 
 To use this project, follow these steps:
 
