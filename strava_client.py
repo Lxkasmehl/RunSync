@@ -100,15 +100,37 @@ class StravaClient:
             try:
                 # Try to make a request with the current access token
                 session = OAuth2Session(client_id=self.client_id, token={"access_token": access_token})
-                response = session.get(
-                    f"{self.athlete_activities_url}?before={end_timestamp}&after={start_timestamp}&page=1&per_page=200")
-                response.raise_for_status()
+                activities = []
+                page = 1
+                while True:
+                    response = session.get(
+                        f"{self.athlete_activities_url}?before={end_timestamp}&after={start_timestamp}&page={page}&per_page=200")
+                    response.raise_for_status()
+                    activities.extend(response.json())
+                    if len(response.json()) < 200:
+                        break
+                    page += 1
             except Exception as e:
                 # If the request fails, refresh the token and try again
                 print(f"Request failed with error: {e}")
                 access_token = self.refresh_token()
                 session = OAuth2Session(client_id=self.client_id, token={"access_token": access_token})
-                response = session.get(
-                    f"{self.athlete_activities_url}?before={end_timestamp}&after={start_timestamp}&page=1&per_page=200")
-                response.raise_for_status()
-        return response.json()
+                activities = []
+                page = 1
+                while True:
+                    response = session.get(
+                        f"{self.athlete_activities_url}?before={end_timestamp}&after={start_timestamp}&page={page}&per_page=200")
+                    response.raise_for_status()
+                    activities.extend(response.json())
+                    if len(response.json()) < 200:
+                        break
+                    page += 1
+        return activities
+
+def main():
+    client = StravaClient()
+
+    print(client.get_all_activities_in_timeframe('2024-09-06 16:37:00', '2024-09-06 16:39:00'))
+
+if __name__ == "__main__":
+    main()
