@@ -6,9 +6,9 @@ Components
 
 The project consists of three main components:
 
-Strava Client: A Python class that interacts with the Strava API to retrieve activity details.
-Garmin Client: A Python class that uses Selenium to interact with the Garmin website and transfer activities.
-Sheets Client: A Python class that interacts with the Google Sheets API to update a spreadsheet with the collected data.
+* Strava Client: A Python class that interacts with the Strava API to retrieve activity details.
+* Garmin Client: A Python class that uses Selenium to interact with the Garmin website and transfer activities.
+* Sheets Client: A Python class that interacts with the Google Sheets API to update a spreadsheet with the collected data.
 
 Functionality
 
