@@ -167,11 +167,11 @@ def main():
     driver = uc.Chrome(headless=False, use_subprocess=False)
     wait = WebDriverWait(driver, 20)
 
-    #update_activities_since_first_not_completed_day(sheets_client, strava_client)
+    update_activities_since_first_not_completed_day(sheets_client, strava_client)
 
-    #update_p4_p7_worksheets(sheets_client, strava_client)
+    update_p4_p7_worksheets(sheets_client, strava_client)
 
-    transfer_all_activities_not_yet_transferred_from_Strava_to_Garmin_without_stop(strava_client, garmin_client, driver, wait)
+    #transfer_all_activities_not_yet_transferred_from_Strava_to_Garmin_without_stop(strava_client, garmin_client, driver, wait)
 
 
 if __name__ == "__main__":
