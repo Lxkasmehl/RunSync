@@ -29,6 +29,20 @@ class GarminClient:
                                                          "g__button--contained--large g__button--contained--ocean-blue' "
                                                          "and @data-testid='g__button' and @type='submit']"))).click()
 
+    def click_element(self, driver, wait, p_element):
+        max_retries = 3
+        retry_count = 0
+        while retry_count < max_retries:
+            try:
+                element = wait.until(EC.element_to_be_clickable(p_element))
+                element.click()
+                break
+            except StaleElementReferenceException:
+                retry_count += 1
+                print(f"Stale element reference exception, retrying ({retry_count}/{max_retries})")
+        if retry_count == max_retries:
+            raise Exception("Failed to click previous button after max retries")
+
     def get_activity_date_from_list(self, driver, wait, element):
         driver.execute_script("arguments[0].scrollIntoView(true);", element)
 
@@ -73,6 +87,14 @@ class GarminClient:
 
     def open_calendar_view(self, driver, wait):
         wait.until(EC.element_to_be_clickable((By.XPATH, "//a[@href='/modern/calendar']"))).click()
+
+    def click_first_activity_in_overview(self, driver, wait):
+        element = wait.until(EC.presence_of_element_located((By.XPATH, "//li[@class='list-item animated row-fluid']")))
+        link = element.find_element(By.CSS_SELECTOR, "a.inline-edit-target")
+        link.click()
+
+    def click_previous_button(self, driver, wait):
+        self.click_element(driver, wait, (By.XPATH, "//button[@class='page-previous page-navigation-action' and @aria-label='Previous']"))
 
     def get_all_activities_after_date(self, driver, wait, date):
         comparisonDate = datetime.datetime.strptime(date, '%Y-%m-%d %H:%M:%S')
@@ -145,6 +167,11 @@ class GarminClient:
 
         return dt
 
+    def get_name_from_activity(self, driver, wait):
+        nameElement = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "span.inline-edit-target.page-title-overflow")))
+        name = nameElement.text
+        return name
+
     def open_activity_in_new_tab_and_get_date(self, driver, wait, element):
         driver.execute_script("arguments[0].scrollIntoView(true);", element)
 
@@ -157,6 +184,27 @@ class GarminClient:
 
         dt = self.get_date_time_from_activity(driver, wait)
         return dt
+
+    def edit_current_garmin_activity(self, driver, wait, correspondingStravaActivity):
+        self.click_element(driver, wait, (By.XPATH, "//button[@class='inline-edit-trigger modal-trigger' and @aria-label='Edit']"))
+        actions = ActionChains(driver)
+        actions.send_keys(correspondingStravaActivity['name'])
+        actions.perform()
+        self.click_element(driver, wait,
+                           (By.XPATH, "//button[@class='inline-edit-save icon-checkmark' and @aria-label='Save']"))
+
+        try:
+            descriptionTextarea = wait.until(EC.presence_of_element_located(
+                (By.XPATH, "//textarea[@class='noteTextarea']")))
+            descriptionTextarea.send_keys(correspondingStravaActivity['description'])
+        except:
+            self.click_element(driver, wait, (By.XPATH, "//a[@class='edit-note-button colored' and @href='#']"))
+            descriptionTextarea = wait.until(EC.presence_of_element_located(
+                (By.XPATH, "//textarea[@class='noteTextarea']")))
+            descriptionTextarea.send_keys(correspondingStravaActivity['description'])
+
+        self.click_element(driver, wait,
+                           (By.XPATH, "//button[@class='btn btn-small add-note-button' and text()='Save']"))
 
 def main():
     driver = uc.Chrome(headless=False, use_subprocess=False)

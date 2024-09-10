@@ -1,15 +1,10 @@
 import time
-from datetime import datetime
-
-from selenium.common import TimeoutException
-from selenium.webdriver import Keys
+from datetime import datetime, timedelta
 
 from garmin_client import GarminClient
 from strava_client import StravaClient
 from sheets_client import SheetsClient
-from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 import undetected_chromedriver as uc
 
 def get_first_not_completed_day(sheets_client):
@@ -135,24 +130,30 @@ def update_activities_since_first_not_completed_day(sheets_client, strava_client
     # Update the sheets with activity details
     update_sheets_with_activity_details(sheets_client, strava_client, activities)
 
-def transfer_all_activities_not_yet_transferred_from_Strava_to_Garmin(strava_client, garmin_client, driver, wait):
+def transfer_all_activities_not_yet_transferred_from_Strava_to_Garmin_without_stop(strava_client, garmin_client, driver, wait):
     garmin_client.login(driver, wait)
     garmin_client.open_activity_overview(driver, wait)
-
-    i = 0
+    garmin_client.click_first_activity_in_overview(driver, wait)
 
     while True:
-        elementsList = garmin_client.get_all_activities_displayed_in_overview(driver, wait)
-
-        if i >= len(elementsList):
-            break
-
-        date = garmin_client.open_activity_in_new_tab_and_get_date(driver, wait, elementsList[i])
+        date = garmin_client.get_date_time_from_activity(driver, wait)
         print(date)
 
-        driver.close()
-        driver.switch_to.window(driver.window_handles[-1])
-        i += 1
+        start_date = (date - timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S")
+        end_date = (date + timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S")
+
+        correspondingStravaActivityWoDetails = strava_client.get_all_activities_in_timeframe(start_date, end_date)[0]
+        correspondingStravaActivity = strava_client.get_strava_data_for_activity_with_specific_ID(correspondingStravaActivityWoDetails['id'], False)
+
+        print(correspondingStravaActivity)
+
+        if (correspondingStravaActivity['name'] not in ['Afternoon Workout', 'Morning Workout', 'Evening Workout',
+                                                        'Lunch Workout', 'Night Workout']) and (
+                garmin_client.get_name_from_activity(driver, wait) != correspondingStravaActivity['name']):
+            garmin_client.edit_current_garmin_activity(driver, wait, correspondingStravaActivity)
+
+        garmin_client.click_previous_button(driver, wait)
+        time.sleep(3)
 
 def main():
     """
@@ -170,7 +171,7 @@ def main():
 
     #update_p4_p7_worksheets(sheets_client, strava_client)
 
-    transfer_all_activities_not_yet_transferred_from_Strava_to_Garmin(strava_client, garmin_client, driver, wait)
+    transfer_all_activities_not_yet_transferred_from_Strava_to_Garmin_without_stop(strava_client, garmin_client, driver, wait)
 
 
 if __name__ == "__main__":
