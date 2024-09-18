@@ -4,6 +4,7 @@ import re
 import os
 import time
 
+import unicodedata
 from dateutil import parser
 from dotenv import load_dotenv
 from selenium.common import StaleElementReferenceException

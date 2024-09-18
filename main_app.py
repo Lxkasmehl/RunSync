@@ -135,21 +135,28 @@ def transfer_all_activities_not_yet_transferred_from_Strava_to_Garmin_without_st
     garmin_client.open_activity_overview(driver, wait)
     garmin_client.click_first_activity_in_overview(driver, wait)
 
+    all_activities = strava_client.get_all_activities_in_timeframe("2020-01-01 00:00:00",
+                                                                   datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
     while True:
         date = garmin_client.get_date_time_from_activity(driver, wait)
-        print(date)
+        date_str = date.strftime("%Y-%m-%dT%H:%M:%S")
+        print(date, date_str)
 
-        start_date = (date - timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S")
-        end_date = (date + timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S")
+        #start_date = (date - timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S")
+        #end_date = (date + timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S")
 
-        correspondingStravaActivityWoDetails = strava_client.get_all_activities_in_timeframe(start_date, end_date)[0]
-        correspondingStravaActivity = strava_client.get_strava_data_for_activity_with_specific_ID(correspondingStravaActivityWoDetails['id'], False)
+        #correspondingStravaActivityWoDetails = strava_client.get_all_activities_in_timeframe(start_date, end_date)[0]
 
-        print(correspondingStravaActivity)
+        correspondingStravaActivityWoDetails = next((activity for activity in all_activities if datetime.strptime(activity['start_date_local'],"%Y-%m-%dT%H:%M:%SZ").replace(second=0).isoformat() == date_str), None)
 
-        if (correspondingStravaActivity['name'] not in ['Afternoon Workout', 'Morning Workout', 'Evening Workout',
+        if (correspondingStravaActivityWoDetails['name'] not in ['Afternoon Workout', 'Morning Workout', 'Evening Workout',
                                                         'Lunch Workout', 'Night Workout']) and (
-                garmin_client.get_name_from_activity(driver, wait) != correspondingStravaActivity['name']):
+                garmin_client.get_name_from_activity(driver, wait) != correspondingStravaActivityWoDetails['name']):
+
+            correspondingStravaActivity = strava_client.get_strava_data_for_activity_with_specific_ID(
+                correspondingStravaActivityWoDetails['id'], False)
+            print(correspondingStravaActivity)
             garmin_client.edit_current_garmin_activity(driver, wait, correspondingStravaActivity)
 
         garmin_client.click_previous_button(driver, wait)
@@ -171,7 +178,7 @@ def main():
 
     update_p4_p7_worksheets(sheets_client, strava_client)
 
-    #transfer_all_activities_not_yet_transferred_from_Strava_to_Garmin_without_stop(strava_client, garmin_client, driver, wait)
+    transfer_all_activities_not_yet_transferred_from_Strava_to_Garmin_without_stop(strava_client, garmin_client, driver, wait)
 
 
 if __name__ == "__main__":
