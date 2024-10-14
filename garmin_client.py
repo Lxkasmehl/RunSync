@@ -154,8 +154,7 @@ class GarminClient:
             else:
                 date_parts = text.replace(",", "").split()[-6:]
                 month, day, year, *_ = date_parts
-                month_num = datetime.datetime.strptime(month, '%B').month
-                dt = datetime.datetime(int(year), month_num, int(day))
+                dt = parser.parse(f"{month} {day}, {year}")
 
         # Check if the text contains a time in the format "HH:MM AM/PM"
         time_match = re.search(r"(\d{1,2}):(\d{2}) (am|pm)", text)
@@ -194,15 +193,27 @@ class GarminClient:
         self.click_element(driver, wait,
                            (By.XPATH, "//button[@class='inline-edit-save icon-checkmark' and @aria-label='Save']"))
 
-        try:
-            descriptionTextarea = wait.until(EC.presence_of_element_located(
-                (By.XPATH, "//textarea[@class='noteTextarea']")))
-            descriptionTextarea.send_keys(correspondingStravaActivity['description'])
-        except:
-            self.click_element(driver, wait, (By.XPATH, "//a[@class='edit-note-button colored' and @href='#']"))
-            descriptionTextarea = wait.until(EC.presence_of_element_located(
-                (By.XPATH, "//textarea[@class='noteTextarea']")))
-            descriptionTextarea.send_keys(correspondingStravaActivity['description'])
+        element = wait.until(
+            EC.presence_of_element_located((By.XPATH, "//a[@class='edit-note-button colored' and @href='#']")))
+        if element.value_of_css_property("display") != "none":
+            self.click_element(driver, wait, element)
+
+        max_retries = 3
+        retry_count = 0
+        while retry_count < max_retries:
+            try:
+                descriptionTextarea = wait.until(EC.presence_of_element_located(
+                    (By.XPATH, "//textarea[@class='noteTextarea']")))
+                self.click_element(driver, wait, descriptionTextarea)
+                actions = ActionChains(driver)
+                actions.send_keys(correspondingStravaActivity['description'])
+                actions.perform()
+                break
+            except StaleElementReferenceException:
+                retry_count += 1
+                print(f"Stale element reference exception, retrying ({retry_count}/{max_retries})")
+        if retry_count == max_retries:
+            raise Exception("Failed to click previous button after max retries")
 
         self.click_element(driver, wait,
                            (By.XPATH, "//button[@class='btn btn-small add-note-button' and text()='Save']"))

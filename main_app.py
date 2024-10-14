@@ -143,11 +143,6 @@ def transfer_all_activities_not_yet_transferred_from_Strava_to_Garmin_without_st
         date_str = date.strftime("%Y-%m-%dT%H:%M:%S")
         print(date, date_str)
 
-        #start_date = (date - timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S")
-        #end_date = (date + timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S")
-
-        #correspondingStravaActivityWoDetails = strava_client.get_all_activities_in_timeframe(start_date, end_date)[0]
-
         correspondingStravaActivityWoDetails = next((activity for activity in all_activities if datetime.strptime(activity['start_date_local'],"%Y-%m-%dT%H:%M:%SZ").replace(second=0).isoformat() == date_str), None)
 
         if (correspondingStravaActivityWoDetails['name'] not in ['Afternoon Workout', 'Morning Workout', 'Evening Workout',
