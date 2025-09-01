@@ -83,36 +83,76 @@ def update_p4_p7_worksheets(sheets_client, strava_client):
     # Get the empty P4 and P7 worksheets
     empty_p4_p7_worksheets = sheets_client.get_empty_p4_p7_worksheets()
 
+    if not empty_p4_p7_worksheets:
+        print("No worksheets to update.")
+        return
+
+    # Collect all updates to do them in batches
+    all_updates = []
+    
     # Iterate over the worksheets
     for ws in empty_p4_p7_worksheets:
-        # Get the cell value of the worksheet
-        cell_value = ws.acell('B1').value
+        try:
+            # Get the cell value of the worksheet
+            cell_value = ws.acell('B1').value
 
-        # Split the cell value into separate values
-        split_values = cell_value.split()
+            # Split the cell value into separate values
+            split_values = cell_value.split()
 
-        # Parse the start and end dates from the split values
-        start_date = datetime.strptime(split_values[3], "%d.%m.%Y")
-        end_date = datetime.strptime(split_values[5], "%d.%m.%Y")
+            # Parse the start and end dates from the split values
+            start_date = datetime.strptime(split_values[3], "%d.%m.%Y")
+            end_date = datetime.strptime(split_values[5], "%d.%m.%Y")
 
-        # Check if the end date is less than or equal to the current date
-        if end_date <= datetime.now():
-            # Get all activities in the given timeframe
-            all_activities = get_activities_in_timeframe(strava_client, start_date, end_date)
+            # Check if the end date is less than or equal to the current date
+            if end_date <= datetime.now():
+                # Get all activities in the given timeframe
+                all_activities = get_activities_in_timeframe(strava_client, start_date, end_date)
 
-            # Filter out yoga activities
-            yoga_activities = [activity for activity in all_activities if activity['sport_type'] == "Yoga"]
-            yoga_count = len(yoga_activities)
+                # Filter out yoga activities
+                yoga_activities = [activity for activity in all_activities if activity['sport_type'] == "Yoga"]
+                yoga_count = len(yoga_activities)
 
-            # Update the P7 cell with the yoga count
-            ws.update_acell('P7', yoga_count)
+                # Filter out workout activities
+                workout_activities = [activity for activity in all_activities if activity['sport_type'] == "Workout"]
+                workout_count = len(workout_activities)
 
-            # Filter out workout activities
-            workout_activities = [activity for activity in all_activities if activity['sport_type'] == "Workout"]
-            workout_count = len(workout_activities)
-
-            # Update the P4 cell with the workout count
-            ws.update_acell('P4', workout_count)
+                # Collect updates for this worksheet
+                all_updates.append((ws, 'P7', yoga_count))
+                all_updates.append((ws, 'P4', workout_count))
+                
+                print(f"Collected updates for worksheet {ws.title}: P7={yoga_count}, P4={workout_count}")
+                
+        except Exception as e:
+            print(f"Error processing worksheet {ws.title}: {e}")
+            continue
+    
+    # Execute all updates in batches
+    if all_updates:
+        print(f"Executing {len(all_updates)} P4/P7 updates...")
+        
+        # Group updates by worksheet to minimize API calls
+        worksheet_updates = {}
+        for ws, cell, value in all_updates:
+            if ws not in worksheet_updates:
+                worksheet_updates[ws] = []
+            worksheet_updates[ws].append((cell, value))
+        
+        # Update each worksheet with its collected updates
+        for ws, updates in worksheet_updates.items():
+            try:
+                # Use batch_update with proper format: list of dicts with 'range' and 'values'
+                batch_data = [{'range': cell, 'values': [[value]]} for cell, value in updates]
+                ws.batch_update(batch_data)
+                print(f"Successfully updated worksheet {ws.title} with {len(updates)} cells")
+            except Exception as e:
+                print(f"Failed to batch update worksheet {ws.title}: {e}")
+                # Fallback to individual updates
+                for cell, value in updates:
+                    try:
+                        ws.update_acell(cell, value)
+                        time.sleep(0.1)  # Small delay between individual updates
+                    except Exception as fallback_e:
+                        print(f"Failed to update {cell} in {ws.title}: {fallback_e}")
 
 def update_activities_since_first_not_completed_day(sheets_client, strava_client):
     # Get the first not completed day

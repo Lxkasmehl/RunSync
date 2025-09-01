@@ -96,35 +96,37 @@ class StravaClient:
         access_token = self.get_token()
         if access_token is None:
             access_token = self.authenticate()
-        else:
-            try:
-                # Try to make a request with the current access token
-                session = OAuth2Session(client_id=self.client_id, token={"access_token": access_token})
-                activities = []
-                page = 1
-                while True:
-                    response = session.get(
-                        f"{self.athlete_activities_url}?before={end_timestamp}&after={start_timestamp}&page={page}&per_page=200")
-                    response.raise_for_status()
-                    activities.extend(response.json())
-                    if len(response.json()) < 200:
-                        break
-                    page += 1
-            except Exception as e:
-                # If the request fails, refresh the token and try again
-                print(f"Request failed with error: {e}")
-                access_token = self.refresh_token()
-                session = OAuth2Session(client_id=self.client_id, token={"access_token": access_token})
-                activities = []
-                page = 1
-                while True:
-                    response = session.get(
-                        f"{self.athlete_activities_url}?before={end_timestamp}&after={start_timestamp}&page={page}&per_page=200")
-                    response.raise_for_status()
-                    activities.extend(response.json())
-                    if len(response.json()) < 200:
-                        break
-                    page += 1
+        
+        # Initialize activities list outside the try/except blocks
+        activities = []
+        
+        try:
+            # Try to make a request with the current access token
+            session = OAuth2Session(client_id=self.client_id, token={"access_token": access_token})
+            page = 1
+            while True:
+                response = session.get(
+                    f"{self.athlete_activities_url}?before={end_timestamp}&after={start_timestamp}&page={page}&per_page=200")
+                response.raise_for_status()
+                activities.extend(response.json())
+                if len(response.json()) < 200:
+                    break
+                page += 1
+        except Exception as e:
+            # If the request fails, refresh the token and try again
+            print(f"Request failed with error: {e}")
+            access_token = self.refresh_token()
+            session = OAuth2Session(client_id=self.client_id, token={"access_token": access_token})
+            page = 1
+            while True:
+                response = session.get(
+                    f"{self.athlete_activities_url}?before={end_timestamp}&after={start_timestamp}&page={page}&per_page=200")
+                response.raise_for_status()
+                activities.extend(response.json())
+                if len(response.json()) < 200:
+                    break
+                page += 1
+        
         return activities
 
 def main():
