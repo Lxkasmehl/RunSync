@@ -141,7 +141,8 @@ def update_p4_p7_worksheets(sheets_client, strava_client):
         for ws, updates in worksheet_updates.items():
             try:
                 # Use batch_update with proper format: list of dicts with 'range' and 'values'
-                batch_data = [{'range': cell, 'values': [[value]]} for cell, value in updates]
+                # The range should include the worksheet name and cell reference
+                batch_data = [{'range': f'{ws.title}!{cell}', 'values': [[value]]} for cell, value in updates]
                 ws.batch_update(batch_data)
                 print(f"Successfully updated worksheet {ws.title} with {len(updates)} cells")
             except Exception as e:
@@ -214,7 +215,6 @@ def main():
     update_p4_p7_worksheets(sheets_client, strava_client)
 
     transfer_all_activities_not_yet_transferred_from_Strava_to_Garmin_without_stop(strava_client, garmin_client, driver, wait)
-
 
 if __name__ == "__main__":
     main()

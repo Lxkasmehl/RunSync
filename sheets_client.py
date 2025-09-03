@@ -95,9 +95,29 @@ class SheetsClient:
         date_str = activityDetails['start_date_local']
         date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
 
-        # Calculate the week number and worksheet title
+        # Calculate the week number and worksheet title for Sunday-Saturday weeks
+        # Get the start of the week (Sunday) for the given date
+        days_since_sunday = (date.weekday() + 1) % 7  # Convert Monday=0 to Sunday=0
+        week_start = date - timedelta(days=days_since_sunday)
+        
+        # Calculate week number based on Sunday-Saturday weeks
+        # Use the year of the week start date
+        year = week_start.year
+        # Calculate week number: week of year starting from first Sunday
+        first_sunday_of_year = datetime(year, 1, 1)
+        days_to_first_sunday = (6 - first_sunday_of_year.weekday()) % 7
+        if days_to_first_sunday == 0 and first_sunday_of_year.weekday() != 6:
+            days_to_first_sunday = 7
+        first_sunday_of_year += timedelta(days=days_to_first_sunday)
+
+                # Calculate the week number and worksheet title
         week_number = date.isocalendar()[1]
-        worksheet_title = f"KW{week_number}{date.strftime('%y')}"
+        
+        # If the weekday is Sunday, increment the week number by 1
+        if date.weekday() == 6:  # Sunday is 6 in Python's weekday() (Monday=0, Sunday=6)
+            week_number += 1
+
+        worksheet_title = f"KW{week_number}{week_start.strftime('%y')}"
 
         # Get the list of existing worksheets from cache
         worksheets = self._get_worksheets_cached()
@@ -148,32 +168,72 @@ class SheetsClient:
                 next_available_row_A = len(cell_list_A) + 1
                 overview_updates.append((f"A{next_available_row_A}", worksheet_title))
 
-            if worksheet_title not in cell_list_J:
+            # Check if hyperlink already exists in column J
+            hyperlink_exists = False
+            for i, cell_value in enumerate(cell_list_J):
+                if cell_value and ('=HYPERLINK(' in str(cell_value) or 'HYPERLINK(' in str(cell_value)) and worksheet_title in str(cell_value):
+                    hyperlink_exists = True
+                    break
+            
+            if not hyperlink_exists:
                 next_available_row_J = len(cell_list_J) + 1
                 # Use the new_worksheet object directly instead of looking it up again
                 worksheet_url = f"https://docs.google.com/spreadsheets/d/{sh.id}/edit#gid={new_worksheet.id}"
+                # Use user_entered_value to ensure the formula is treated as a formula, not text
                 overview_updates.append((f"J{next_available_row_J}", f'=HYPERLINK("{worksheet_url}";"{worksheet_title}")'))
             
-            # Execute overview updates in batch if any
+            # Execute overview updates - handle hyperlinks separately to ensure they work as formulas
             if overview_updates:
                 try:
-                    batch_data = [{'range': cell, 'values': [[value]]} for cell, value in overview_updates]
-                    overview_ws.batch_update(batch_data)
-                    print(f"Updated overview with {len(overview_updates)} cells in batch")
-                except Exception as e:
-                    print(f"Batch overview update failed, falling back to individual updates: {e}")
+                    # Separate hyperlink updates from regular updates
+                    hyperlink_updates = []
+                    regular_updates = []
+                    
                     for cell, value in overview_updates:
-                        overview_ws.update_acell(cell, value)
+                        if cell.startswith('J') and value.startswith('=HYPERLINK'):
+                            hyperlink_updates.append((cell, value))
+                        else:
+                            regular_updates.append((cell, value))
+                    
+                    # Process regular updates in batch
+                    if regular_updates:
+                        batch_data = [{'range': cell, 'values': [[value]]} for cell, value in regular_updates]
+                        overview_ws.batch_update(batch_data)
+                        print(f"Updated {len(regular_updates)} regular cells in batch")
+                    
+                    # Process hyperlink updates individually with USER_ENTERED option
+                    for cell, value in hyperlink_updates:
+                        overview_ws.update_acell(cell, value, value_input_option='USER_ENTERED')
+                        time.sleep(0.1)  # Small delay between hyperlink updates
+                    
+                    if hyperlink_updates:
+                        print(f"Updated {len(hyperlink_updates)} hyperlink cells individually")
+                        
+                except Exception as e:
+                    print(f"Overview update failed, falling back to individual updates: {e}")
+                    for cell, value in overview_updates:
+                        try:
+                            if cell.startswith('J') and value.startswith('=HYPERLINK'):
+                                # For hyperlink formulas, use USER_ENTERED to ensure they're treated as formulas
+                                overview_ws.update_acell(cell, value, value_input_option='USER_ENTERED')
+                            else:
+                                overview_ws.update_acell(cell, value)
+                            time.sleep(0.1)  # Small delay between updates
+                        except Exception as individual_e:
+                            print(f"Failed to update {cell}: {individual_e}")
 
-            # Set the header row in the new worksheet
+            # Set the header row in the new worksheet with Sunday-Saturday week range
+            week_start_sunday = week_start
+            week_end_saturday = week_start_sunday + timedelta(days=6)
             new_worksheet.update_acell("B1:O1",
-                                       f"KW {week_number}{date.strftime('%y')} - {date - timedelta(days=date.weekday()):%d.%m.%Y} - {date + timedelta(days=6 - date.weekday()):%d.%m.%Y}")
+                                       f"KW {week_number}{week_start_sunday.strftime('%y')} - {week_start_sunday:%d.%m.%Y} - {week_end_saturday:%d.%m.%Y}")
         else:
             print("Using existing worksheet:", worksheet_title)
             new_worksheet = existing_worksheet
 
-        # Calculate the day of the week and column offset
-        day_of_week = date.weekday()
+        # Calculate the day of the week and column offset for Sunday-Saturday format
+        # Convert to Sunday=0, Monday=1, ..., Saturday=6
+        day_of_week = (date.weekday() + 1) % 7
         column_offset = day_of_week * 2
         column_range = chr(ord('B') + column_offset) + ":" + chr(ord('B') + column_offset + 1)
 
