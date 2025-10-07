@@ -1,6 +1,6 @@
-# 🏃‍♂️ RunSync - GitHub Pages + GitHub Actions
+# 🏃‍♂️ RunSync - GitHub Actions
 
-Eine sichere Web-Interface-Lösung für deine RunSync Python-Funktionen, die über GitHub Pages läuft und GitHub Actions für die Ausführung verwendet.
+Eine automatisierte Lösung für deine RunSync Python-Funktionen, die über GitHub Actions ausgeführt werden.
 
 ## 🎯 **Was ist das?**
 
@@ -10,12 +10,12 @@ RunSync ist ein Tool, das deine Aktivitäten zwischen verschiedenen Plattformen 
 - **Google Sheets** → **P4/P7 Worksheets** (Daten verarbeiten)
 - **Strava** → **Garmin** (Aktivitäten übertragen)
 
-## 🌐 **Live Demo**
+## 🚀 **GitHub Actions**
 
-Nach dem Setup ist deine Website verfügbar unter:
+Deine RunSync-Funktionen werden über GitHub Actions ausgeführt:
 
 ```
-https://YOUR_USERNAME.github.io/YOUR_REPO_NAME/
+https://github.com/YOUR_USERNAME/YOUR_REPO_NAME/actions
 ```
 
 ## 🚀 **Schnellstart**
@@ -34,27 +34,19 @@ git branch -M main
 git push -u origin main
 ```
 
-### **2. GitHub Pages aktivieren**
-
-1. Gehe zu deinem Repository auf GitHub
-2. Klicke auf **Settings** → **Pages**
-3. Unter **Source** wähle **GitHub Actions**
-4. Speichere die Einstellungen
-
-### **3. Repository Secrets konfigurieren**
+### **2. Repository Secrets konfigurieren**
 
 Gehe zu **Settings** → **Secrets and variables** → **Actions** und füge hinzu:
 
-- `ADMIN_PASSWORD`: Dein sicheres Passwort für die Web-Interface
+- `ADMIN_PASSWORD`: Dein sicheres Passwort für die Authentifizierung
 
-### **4. Website anpassen**
+### **3. GitHub Actions testen**
 
-Bearbeite `docs/secure-workflow-trigger.js` und ersetze:
-
-```javascript
-this.owner = 'YOUR_GITHUB_USERNAME'; // Dein GitHub Username
-this.repo = 'YOUR_REPO_NAME'; // Dein Repository Name
-```
+1. Gehe zu **Actions** in deinem Repository
+2. Wähle **RunSync Tasks**
+3. Klicke **Run workflow**
+4. Wähle Task-Typ und gib Passwort ein
+5. Klicke **Run workflow**
 
 ## 📁 **Projektstruktur**
 
@@ -62,77 +54,48 @@ this.repo = 'YOUR_REPO_NAME'; // Dein Repository Name
 RunSync/
 ├── .github/
 │   └── workflows/
-│       ├── runsync.yml          # Hauptworkflow für Python-Funktionen
-│       └── deploy-pages.yml     # GitHub Pages Deployment
-├── docs/
-│   ├── index.html              # Hauptwebsite
-│   ├── secure-workflow-trigger.js  # Sichere Workflow-Integration
-│   └── github-api.js           # GitHub API Integration (nicht verwendet)
+│       └── runsync.yml          # GitHub Actions Workflow
 ├── main_app.py                 # Deine Python-Funktionen
 ├── strava_client.py
 ├── garmin_client.py
 ├── sheets_client.py
 ├── requirements.txt            # Python Dependencies
-├── setup_github_pages.py       # Setup-Skript
 └── README.md                   # Diese Datei
 ```
 
 ## 🔧 **Wie es funktioniert**
 
-### **Website (GitHub Pages)**
-
-- **Statische HTML-Website** in `docs/index.html`
-- **Passwort-Schutz** für Sicherheit
-- **4 Buttons** für deine Hauptfunktionen
-- **Real-time Status-Updates** (simuliert)
-
-### **Python-Funktionen (GitHub Actions)**
+### **GitHub Actions Workflow**
 
 - **Workflow-Dispatch** triggert Python-Skripte
 - **Ubuntu-Runner** mit Python 3.11
 - **Chrome + Selenium** für Garmin-Integration
 - **Alle Dependencies** automatisch installiert
+- **Passwort-Verifikation** über Repository Secrets
 
 ## 🎮 **Verwendung**
 
-### **1. Website öffnen**
-
-Nach dem Deployment ist deine Website verfügbar unter:
-
-```
-https://YOUR_USERNAME.github.io/YOUR_REPO_NAME/
-```
-
-### **2. Tasks ausführen**
-
-1. **Passwort eingeben** (Standard: `admin123`)
-2. **Button klicken** für gewünschte Funktion
-3. **Anleitung wird angezeigt** mit allen Details
-4. **GitHub Actions Link** öffnet sich automatisch
-5. **Manuell ausführen** mit den angezeigten Parametern
-
-### **3. Manuell über GitHub Actions**
-
-Du kannst Tasks auch direkt über GitHub Actions starten:
+### **Manuell über GitHub Actions**
 
 1. Gehe zu **Actions** in deinem Repository
 2. Wähle **RunSync Tasks**
 3. Klicke **Run workflow**
 4. Wähle Task-Typ und gib Passwort ein
+5. Klicke **Run workflow**
+
+### **Verfügbare Tasks:**
+
+- **update_activities**: Aktualisiert alle Aktivitäten seit dem ersten nicht abgeschlossenen Tag
+- **update_p4_p7**: Aktualisiert die P4 und P7 Worksheets mit den neuesten Daten
+- **transfer_garmin_stop**: Überträgt Aktivitäten von Strava zu Garmin und stoppt bei bereits übertragenen
+- **transfer_garmin_no_stop**: Überträgt alle Aktivitäten von Strava zu Garmin ohne automatischen Stop
 
 ## 🔒 **Sicherheit**
 
 ### **Passwort-Schutz**
 
-- **Web-Interface**: Einfaches Passwort (in `docs/index.html`)
-- **GitHub Actions**: Repository Secret `ADMIN_PASSWORD`
-- **Beide müssen übereinstimmen**
-
-### **Tokenlose Lösung**
-
-- **Kein GitHub Token nötig** - 100% sicher
-- **Manuelle Ausführung** über GitHub Actions
-- **Keine API-Calls** von der Website
+- **Repository Secret** `ADMIN_PASSWORD` für Authentifizierung
+- **Workflow-Verifikation** vor jeder Ausführung
 
 ### **Repository Secrets**
 
@@ -146,20 +109,14 @@ echo "ADMIN_PASSWORD=$ADMIN_PASSWORD"
 
 ### **Passwort ändern**
 
-1. **Web-Interface**: Bearbeite `docs/index.html` Zeile 241
-2. **GitHub Actions**: Aktualisiere Repository Secret `ADMIN_PASSWORD`
+1. **GitHub Repository** → **Settings** → **Secrets and variables** → **Actions**
+2. **ADMIN_PASSWORD** bearbeiten oder neu erstellen
 
 ### **Neue Funktionen hinzufügen**
 
 1. **Python-Funktion** in `main_app.py` erstellen
-2. **Button** in `docs/index.html` hinzufügen
-3. **Workflow-Step** in `.github/workflows/runsync.yml` hinzufügen
-
-### **Website-Design anpassen**
-
-- **CSS**: Bearbeite `<style>` in `docs/index.html`
-- **Bootstrap**: Aktualisiere CDN-Links
-- **Icons**: Font Awesome Icons verwenden
+2. **Workflow-Step** in `.github/workflows/runsync.yml` hinzufügen
+3. **Task-Option** in `workflow_dispatch` inputs hinzufügen
 
 ## 📊 **Monitoring**
 
@@ -168,11 +125,6 @@ echo "ADMIN_PASSWORD=$ADMIN_PASSWORD"
 - **Real-time Logs**: In GitHub Actions Tab
 - **Fehler-Debugging**: Detaillierte Python-Stack-Traces
 - **Performance**: Laufzeit-Statistiken
-
-### **Website Analytics**
-
-- **GitHub Pages**: Automatische Statistiken
-- **Custom Analytics**: Google Analytics hinzufügen
 
 ## 🔄 **Updates**
 
@@ -184,8 +136,7 @@ git add .
 git commit -m "Update description"
 git push origin main
 
-# GitHub Pages wird automatisch aktualisiert
-# GitHub Actions Workflows bleiben unverändert
+# GitHub Actions Workflows werden automatisch aktualisiert
 ```
 
 ### **Dependencies aktualisieren**
@@ -202,27 +153,26 @@ git push origin main
 
 ### **Häufige Probleme**
 
-1. **Website lädt nicht**
-
-   - Überprüfe GitHub Pages Settings
-   - Warte 5-10 Minuten nach dem ersten Push
-   - Überprüfe Repository Secrets
-
-2. **Workflow schlägt fehl**
+1. **Workflow schlägt fehl**
 
    - Überprüfe Repository Secrets
    - Schaue in GitHub Actions Logs
    - Teste Python-Code lokal
 
-3. **Chrome/Selenium Fehler**
+2. **Chrome/Selenium Fehler**
 
    - Workflow installiert automatisch Chrome
    - Headless-Mode ist aktiviert
    - Überprüfe Chrome-Version in Logs
 
-4. **Credentials nicht gefunden**
+3. **Credentials nicht gefunden**
+
    - Überprüfe, ob alle Credential-Dateien committed sind
    - Oder verwende Environment Variables
+
+4. **Passwort-Fehler**
+   - Überprüfe Repository Secret `ADMIN_PASSWORD`
+   - Stelle sicher, dass das Passwort korrekt eingegeben wird
 
 ### **Debug-Modus**
 
@@ -256,20 +206,10 @@ on:
     webhook_url: ${{ secrets.SLACK_WEBHOOK }}
 ```
 
-### **Mehrere Umgebungen**
-
-```yaml
-# Staging und Production
-strategy:
-  matrix:
-    environment: [staging, production]
-```
-
 ## 🎉 **Fertig!**
 
-Deine RunSync-Website läuft jetzt auf GitHub Pages und die Python-Funktionen werden über GitHub Actions ausgeführt. Das ist eine kostenlose, skalierbare und sichere Lösung!
+Deine RunSync-Funktionen laufen jetzt über GitHub Actions. Das ist eine kostenlose, skalierbare und sichere Lösung!
 
-**Website URL**: `https://YOUR_USERNAME.github.io/YOUR_REPO_NAME/`
 **Actions URL**: `https://github.com/YOUR_USERNAME/YOUR_REPO_NAME/actions`
 
 ## 📞 **Support**
@@ -283,10 +223,9 @@ Bei Problemen:
 
 ## 🔗 **Links**
 
-- [GitHub Pages Documentation](https://docs.github.com/en/pages)
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
-- [Bootstrap Documentation](https://getbootstrap.com/docs/5.1/)
-- [Font Awesome Icons](https://fontawesome.com/icons)
+- [Python Setup Action](https://github.com/actions/setup-python)
+- [Chrome Setup for Selenium](https://github.com/actions/setup-chrome)
 
 ---
 
