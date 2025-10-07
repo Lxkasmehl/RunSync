@@ -159,7 +159,9 @@ jobs:
               options1.add_argument('--disable-javascript')
               
               # Try with the detected major version
+              print('Attempting to start ChromeDriver with version', major_version)
               driver = uc.Chrome(options=options1, version_main=int(major_version))
+              print('ChromeDriver started successfully with version', major_version)
           except Exception as e:
               print('Failed with version', major_version, ':', str(e))
               try:
@@ -176,7 +178,9 @@ jobs:
                   options2.add_argument('--disable-javascript')
                   
                   # Try with auto-detection as fallback
+                  print('Attempting to start ChromeDriver with auto-detection')
                   driver = uc.Chrome(options=options2, version_main=None)
+                  print('ChromeDriver started successfully with auto-detection')
               except Exception as e2:
                   print('Auto-detection also failed:', str(e2))
                   try:
@@ -193,7 +197,9 @@ jobs:
                       options3.add_argument('--disable-javascript')
                       
                       # Try with a slightly older version
+                      print('Attempting to start ChromeDriver with version', int(major_version) - 1)
                       driver = uc.Chrome(options=options3, version_main=int(major_version) - 1)
+                      print('ChromeDriver started successfully with version', int(major_version) - 1)
                   except Exception as e3:
                       print('All attempts failed:', str(e3))
                       raise
@@ -259,7 +265,9 @@ jobs:
               options1.add_argument('--disable-javascript')
               
               # Try with the detected major version
+              print('Attempting to start ChromeDriver with version', major_version)
               driver = uc.Chrome(options=options1, version_main=int(major_version))
+              print('ChromeDriver started successfully with version', major_version)
           except Exception as e:
               print('Failed with version', major_version, ':', str(e))
               try:
@@ -276,7 +284,9 @@ jobs:
                   options2.add_argument('--disable-javascript')
                   
                   # Try with auto-detection as fallback
+                  print('Attempting to start ChromeDriver with auto-detection')
                   driver = uc.Chrome(options=options2, version_main=None)
+                  print('ChromeDriver started successfully with auto-detection')
               except Exception as e2:
                   print('Auto-detection also failed:', str(e2))
                   try:
@@ -293,20 +303,29 @@ jobs:
                       options3.add_argument('--disable-javascript')
                       
                       # Try with a slightly older version
+                      print('Attempting to start ChromeDriver with version', int(major_version) - 1)
                       driver = uc.Chrome(options=options3, version_main=int(major_version) - 1)
+                      print('ChromeDriver started successfully with version', int(major_version) - 1)
                   except Exception as e3:
                       print('All attempts failed:', str(e3))
                       raise
           wait = WebDriverWait(driver, 20)
 
           try:
+              print('Starting Garmin transfer process...')
               transfer_all_activities_not_yet_transferred_from_Strava_to_Garmin_without_stop(strava_client, garmin_client, driver, wait)
               print('✅ Garmin Transfer without Stop Task completed successfully!')
           except Exception as e:
-              print(f'❌ Garmin Transfer without Stop Task failed: {e}')
+              print('❌ Garmin Transfer without Stop Task failed:')
+              print('Error type:', type(e).__name__)
+              print('Error message:', str(e))
+              import traceback
+              print('Full traceback:')
+              traceback.print_exc()
               exit(1)
           finally:
-              driver.quit()
+              if driver:
+                  driver.quit()
           "
 
       - name: Task completed
