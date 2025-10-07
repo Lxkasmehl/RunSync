@@ -187,12 +187,74 @@ class GarminClient:
         return dt
 
     def edit_current_garmin_activity(self, driver, wait, correspondingStravaActivity):
-        self.click_element(driver, wait, (By.XPATH, "//button[@class='InlineEdit_editIcon__7vqhd' and @aria-label='Edit']"))
+        print("Attempting to edit Garmin activity...")
+        print(f"Current URL: {driver.current_url}")
+        print(f"Page title: {driver.title}")
+        
+        # Try multiple selectors for edit button
+        edit_selectors = [
+            (By.XPATH, "//button[@class='InlineEdit_editIcon__7vqhd' and @aria-label='Edit']"),
+            (By.XPATH, "//button[@aria-label='Edit']"),
+            (By.CSS_SELECTOR, "button[aria-label='Edit']"),
+            (By.XPATH, "//button[contains(@class, 'edit')]"),
+            (By.XPATH, "//button[contains(text(), 'Edit')]"),
+            (By.XPATH, "//button[@class='InlineEdit_editIcon__7vqhd']"),
+            (By.CSS_SELECTOR, ".InlineEdit_editIcon__7vqhd")
+        ]
+        
+        edit_button = None
+        for selector_type, selector_value in edit_selectors:
+            try:
+                print(f"Trying edit selector: {selector_type} = {selector_value}")
+                edit_button = wait.until(EC.element_to_be_clickable((selector_type, selector_value)))
+                print(f"Found edit button with selector: {selector_type} = {selector_value}")
+                break
+            except Exception as e:
+                print(f"Edit selector {selector_type} = {selector_value} failed: {e}")
+                continue
+        
+        if not edit_button:
+            print("Could not find edit button, printing page source (first 2000 chars):")
+            print(driver.page_source[:2000])
+            raise Exception("Could not find edit button with any selector")
+        
+        print("Clicking edit button...")
+        edit_button.click()
+        
+        # Wait a moment for the edit mode to activate
+        time.sleep(1)
+        
         actions = ActionChains(driver)
         actions.send_keys(correspondingStravaActivity['name'])
         actions.perform()
-        self.click_element(driver, wait,
-                           (By.XPATH, "//button[@class='InlineEdit_saveIcon__+WjjM' and @aria-label='Save']"))
+        
+        # Try multiple selectors for save button
+        save_selectors = [
+            (By.XPATH, "//button[@class='InlineEdit_saveIcon__+WjjM' and @aria-label='Save']"),
+            (By.XPATH, "//button[@aria-label='Save']"),
+            (By.CSS_SELECTOR, "button[aria-label='Save']"),
+            (By.XPATH, "//button[contains(@class, 'save')]"),
+            (By.XPATH, "//button[contains(text(), 'Save')]"),
+            (By.XPATH, "//button[@class='InlineEdit_saveIcon__+WjjM']"),
+            (By.CSS_SELECTOR, ".InlineEdit_saveIcon__+WjjM")
+        ]
+        
+        save_button = None
+        for selector_type, selector_value in save_selectors:
+            try:
+                print(f"Trying save selector: {selector_type} = {selector_value}")
+                save_button = wait.until(EC.element_to_be_clickable((selector_type, selector_value)))
+                print(f"Found save button with selector: {selector_type} = {selector_value}")
+                break
+            except Exception as e:
+                print(f"Save selector {selector_type} = {selector_value} failed: {e}")
+                continue
+        
+        if not save_button:
+            raise Exception("Could not find save button with any selector")
+        
+        print("Clicking save button...")
+        save_button.click()
 
         # Note: The edit note button structure has changed in the new Garmin website
         # The textarea is now directly accessible without needing to click an edit button
