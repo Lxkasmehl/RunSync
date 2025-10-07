@@ -34,7 +34,8 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget gnupg unzip curl
+          sudo apt-get install -y wget gnupg unzip curl locales
+          sudo locale-gen de_DE.UTF-8
 
       - name: Install Chrome
         run: |

@@ -33,7 +33,19 @@ else:
 sh = sa.open(os.getenv('DOCUMENT_NAME'))
 
 # Set the locale to German for date formatting
-locale.setlocale(locale.LC_ALL, 'de_DE')
+try:
+    locale.setlocale(locale.LC_ALL, 'de_DE')
+except locale.Error:
+    try:
+        # Try alternative German locale formats
+        locale.setlocale(locale.LC_ALL, 'de_DE.UTF-8')
+    except locale.Error:
+        try:
+            locale.setlocale(locale.LC_ALL, 'de_DE.utf8')
+        except locale.Error:
+            # Fall back to system default if German locale is not available
+            print("Warning: German locale not available, using system default")
+            pass
 
 class SheetsClient:
     """
