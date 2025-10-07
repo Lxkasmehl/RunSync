@@ -8,3 +8,4 @@ google-auth-httplib2
 selenium
 undetected-chromedriver
 python-dotenv
+python-dateutil
