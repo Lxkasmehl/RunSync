@@ -96,7 +96,7 @@ class GarminClient:
         link.click()
 
     def click_previous_button(self, driver, wait):
-        self.click_element(driver, wait, (By.XPATH, "//button[@class='page-previous page-navigation-action' and @aria-label='Previous']"))
+        self.click_element(driver, wait, (By.XPATH, "//button[@aria-label='View Previous']"))
 
     def get_all_activities_after_date(self, driver, wait, date):
         comparisonDate = datetime.datetime.strptime(date, '%Y-%m-%d %H:%M:%S')
@@ -131,7 +131,7 @@ class GarminClient:
         while retry_count < max_retries:
             try:
                 html_element = wait.until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, "div.pull-left.activity-detail-title")))
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "span.ActivityMetaInfo_time__HcDIK")))
                 text = html_element.text.strip().lower()
                 break
             except StaleElementReferenceException:
@@ -169,7 +169,7 @@ class GarminClient:
         return dt
 
     def get_name_from_activity(self, driver, wait):
-        nameElement = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "span.inline-edit-target.page-title-overflow")))
+        nameElement = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "span.InlineEdit_label__PShOX")))
         name = nameElement.text
         return name
 
@@ -187,24 +187,22 @@ class GarminClient:
         return dt
 
     def edit_current_garmin_activity(self, driver, wait, correspondingStravaActivity):
-        self.click_element(driver, wait, (By.XPATH, "//button[@class='inline-edit-trigger modal-trigger' and @aria-label='Edit']"))
+        self.click_element(driver, wait, (By.XPATH, "//button[@class='InlineEdit_editIcon__7vqhd' and @aria-label='Edit']"))
         actions = ActionChains(driver)
         actions.send_keys(correspondingStravaActivity['name'])
         actions.perform()
         self.click_element(driver, wait,
-                           (By.XPATH, "//button[@class='inline-edit-save icon-checkmark' and @aria-label='Save']"))
+                           (By.XPATH, "//button[@class='InlineEdit_saveIcon__+WjjM' and @aria-label='Save']"))
 
-        element = wait.until(
-            EC.presence_of_element_located((By.XPATH, "//a[@class='edit-note-button colored' and @href='#']")))
-        if element.value_of_css_property("display") != "none":
-            self.click_element(driver, wait, element)
+        # Note: The edit note button structure has changed in the new Garmin website
+        # The textarea is now directly accessible without needing to click an edit button
 
         max_retries = 3
         retry_count = 0
         while retry_count < max_retries:
             try:
                 descriptionTextarea = wait.until(EC.presence_of_element_located(
-                    (By.XPATH, "//textarea[@class='noteTextarea']")))
+                    (By.XPATH, "//textarea[@aria-label='How was your run?']")))
                 self.click_element(driver, wait, descriptionTextarea)
                 actions = ActionChains(driver)
                 actions.send_keys(correspondingStravaActivity['description'])
@@ -217,7 +215,7 @@ class GarminClient:
             raise Exception("Failed to click previous button after max retries")
 
         self.click_element(driver, wait,
-                           (By.XPATH, "//button[@class='btn btn-small add-note-button' and text()='Save']"))
+                           (By.XPATH, "//button[@class='Button_btn__g8LLk Button_primary__7zt4j Button_small__waifo' and text()='Save']"))
 
 def main():
     driver = uc.Chrome(headless=False, use_subprocess=False)
