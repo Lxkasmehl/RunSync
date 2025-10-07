@@ -9,3 +9,4 @@ selenium
 undetected-chromedriver
 python-dotenv
 python-dateutil
+gspread
