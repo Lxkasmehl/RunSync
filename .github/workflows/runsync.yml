@@ -58,6 +58,11 @@ jobs:
 
       - name: Run Update Activities Task
         if: github.event.inputs.task_type == 'update_activities'
+        env:
+          FILE_PATH: ${{ secrets.FILE_PATH }}
+          DOCUMENT_NAME: ${{ secrets.DOCUMENT_NAME }}
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
         run: |
           echo "🚀 Starting Update Activities Task..."
           python -c "
@@ -78,6 +83,11 @@ jobs:
 
       - name: Run Update P4/P7 Worksheets Task
         if: github.event.inputs.task_type == 'update_p4_p7'
+        env:
+          FILE_PATH: ${{ secrets.FILE_PATH }}
+          DOCUMENT_NAME: ${{ secrets.DOCUMENT_NAME }}
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
         run: |
           echo "🚀 Starting Update P4/P7 Worksheets Task..."
           python -c "
@@ -98,6 +108,13 @@ jobs:
 
       - name: Run Garmin Transfer with Stop Task
         if: github.event.inputs.task_type == 'transfer_garmin_stop'
+        env:
+          FILE_PATH: ${{ secrets.FILE_PATH }}
+          DOCUMENT_NAME: ${{ secrets.DOCUMENT_NAME }}
+          GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
+          GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
         run: |
           echo "🚀 Starting Garmin Transfer with Stop Task..."
           python -c "
@@ -133,6 +150,13 @@ jobs:
 
       - name: Run Garmin Transfer without Stop Task
         if: github.event.inputs.task_type == 'transfer_garmin_no_stop'
+        env:
+          FILE_PATH: ${{ secrets.FILE_PATH }}
+          DOCUMENT_NAME: ${{ secrets.DOCUMENT_NAME }}
+          GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
+          GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
         run: |
           echo "🚀 Starting Garmin Transfer without Stop Task..."
           python -c "
