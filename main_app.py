@@ -102,6 +102,11 @@ def update_p4_p7_worksheets(sheets_client, strava_client):
             # Parse the start and end dates from the split values
             start_date = datetime.strptime(split_values[3], "%d.%m.%Y")
             end_date = datetime.strptime(split_values[5], "%d.%m.%Y")
+            
+            # Set start_date to beginning of day (00:00:00) and end_date to end of day (23:59:59)
+            # to include all activities on both days
+            start_date = start_date.replace(hour=0, minute=0, second=0)
+            end_date = end_date.replace(hour=23, minute=59, second=59)
 
             # Check if the end date is less than or equal to the current date
             if end_date <= datetime.now():
@@ -115,6 +120,14 @@ def update_p4_p7_worksheets(sheets_client, strava_client):
                 # Filter out workout activities
                 workout_activities = [activity for activity in all_activities if activity['sport_type'] == "Workout"]
                 workout_count = len(workout_activities)
+
+                # Debug information
+                print(f"Worksheet {ws.title}: Date range {start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y %H:%M:%S')}")
+                print(f"Total activities found: {len(all_activities)}")
+                print(f"Yoga activities: {yoga_count}")
+                print(f"Workout activities: {workout_count}")
+                if yoga_activities:
+                    print(f"Yoga activity dates: {[activity['start_date_local'] for activity in yoga_activities]}")
 
                 # Collect updates for this worksheet
                 all_updates.append((ws, 'P7', yoga_count))

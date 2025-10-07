@@ -83,15 +83,16 @@ class GarminClient:
 
     def open_activity_overview(self, driver, wait):
         wait.until(EC.element_to_be_clickable((By.XPATH,
-                                               "//a[@href='' and @class='main-nav-link' and contains(.//span[@class='nav-text'], 'Activities')]"))).click()
-        wait.until(EC.element_to_be_clickable((By.XPATH, "//a[@href='/modern/activities']"))).click()
+                                               "//button[@class='MainSidebar_menuItemLink__ec-sE' and @aria-label='Activities']"))).click()
+        wait.until(EC.element_to_be_clickable((By.XPATH, "//a[@class='MainSidebar_menuItemLink__ec-sE MainSidebar_menuItemLinkChild__AsXDn' and @aria-label='All Activities']"))).click()
 
     def open_calendar_view(self, driver, wait):
         wait.until(EC.element_to_be_clickable((By.XPATH, "//a[@href='/modern/calendar']"))).click()
 
     def click_first_activity_in_overview(self, driver, wait):
-        element = wait.until(EC.presence_of_element_located((By.XPATH, "//li[@class='list-item animated row-fluid']")))
-        link = element.find_element(By.CSS_SELECTOR, "a.inline-edit-target")
+        # Wait for the new modern interface activity list
+        element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.ActivityListItem_listItem__aoJjV")))
+        link = element.find_element(By.CSS_SELECTOR, "a[href*='/modern/activity/']")
         link.click()
 
     def click_previous_button(self, driver, wait):

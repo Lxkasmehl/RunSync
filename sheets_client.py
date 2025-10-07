@@ -74,9 +74,24 @@ class SheetsClient:
         
         # Cache expired or doesn't exist, fetch fresh data
         print("Fetching fresh worksheets list...")
-        self._worksheets_cache = sh.worksheets()
-        self._worksheets_cache_timestamp = current_time
-        return self._worksheets_cache
+        try:
+            self._worksheets_cache = sh.worksheets()
+            self._worksheets_cache_timestamp = current_time
+            return self._worksheets_cache
+        except APIError as e:
+            if e.code == 429:  # Rate limit exceeded
+                print("Rate limit exceeded while fetching worksheets list. Waiting 60 seconds...")
+                time.sleep(60)
+                # Retry once
+                try:
+                    self._worksheets_cache = sh.worksheets()
+                    self._worksheets_cache_timestamp = current_time
+                    return self._worksheets_cache
+                except Exception as retry_e:
+                    print(f"Failed to fetch worksheets after retry: {retry_e}")
+                    raise
+            else:
+                raise
     
     def _clear_worksheets_cache(self):
         """
@@ -179,48 +194,20 @@ class SheetsClient:
                 next_available_row_J = len(cell_list_J) + 1
                 # Use the new_worksheet object directly instead of looking it up again
                 worksheet_url = f"https://docs.google.com/spreadsheets/d/{sh.id}/edit#gid={new_worksheet.id}"
-                # Use user_entered_value to ensure the formula is treated as a formula, not text
-                overview_updates.append((f"J{next_available_row_J}", f'=HYPERLINK("{worksheet_url}";"{worksheet_title}")'))
-            
-            # Execute overview updates - handle hyperlinks separately to ensure they work as formulas
+                # Use proper HYPERLINK formula syntax with semicolon separator
+                hyperlink_formula = f'=HYPERLINK("{worksheet_url}";"{worksheet_title}")'
+                overview_updates.append((f"J{next_available_row_J}", hyperlink_formula))
+
+            # Update regular cells in batch
             if overview_updates:
-                try:
-                    # Separate hyperlink updates from regular updates
-                    hyperlink_updates = []
-                    regular_updates = []
-                    
-                    for cell, value in overview_updates:
-                        if cell.startswith('J') and value.startswith('=HYPERLINK'):
-                            hyperlink_updates.append((cell, value))
-                        else:
-                            regular_updates.append((cell, value))
-                    
-                    # Process regular updates in batch
-                    if regular_updates:
-                        batch_data = [{'range': cell, 'values': [[value]]} for cell, value in regular_updates]
-                        overview_ws.batch_update(batch_data)
-                        print(f"Updated {len(regular_updates)} regular cells in batch")
-                    
-                    # Process hyperlink updates individually with USER_ENTERED option
-                    for cell, value in hyperlink_updates:
-                        overview_ws.update_acell(cell, value, value_input_option='USER_ENTERED')
-                        time.sleep(0.1)  # Small delay between hyperlink updates
-                    
-                    if hyperlink_updates:
-                        print(f"Updated {len(hyperlink_updates)} hyperlink cells individually")
-                        
-                except Exception as e:
-                    print(f"Overview update failed, falling back to individual updates: {e}")
-                    for cell, value in overview_updates:
-                        try:
-                            if cell.startswith('J') and value.startswith('=HYPERLINK'):
-                                # For hyperlink formulas, use USER_ENTERED to ensure they're treated as formulas
-                                overview_ws.update_acell(cell, value, value_input_option='USER_ENTERED')
-                            else:
-                                overview_ws.update_acell(cell, value)
-                            time.sleep(0.1)  # Small delay between updates
-                        except Exception as individual_e:
-                            print(f"Failed to update {cell}: {individual_e}")
+                batch_data = [{'range': cell, 'values': [[value]]} for cell, value in overview_updates]
+                overview_ws.batch_update(batch_data)
+                print(f"Updated {len(overview_updates)} regular cells in batch")
+            
+            # Update hyperlink separately using update_acell to ensure it's treated as a formula
+            if not hyperlink_exists:
+                overview_ws.update_acell(f"J{next_available_row_J}", hyperlink_formula)
+                print(f"Updated hyperlink in J{next_available_row_J}")
 
             # Set the header row in the new worksheet with Sunday-Saturday week range
             week_start_sunday = week_start
@@ -238,7 +225,7 @@ class SheetsClient:
         column_range = chr(ord('B') + column_offset) + ":" + chr(ord('B') + column_offset + 1)
 
         # Calculate the row range based on the time of day
-        row_range = "3:5" if date.hour < 12 else "6:8"
+        row_range = "3:5" if date.hour < 13 else "6:8"
 
         # Collect all updates to do them in batches
         updates = []
@@ -248,13 +235,20 @@ class SheetsClient:
             """
             Collect a cell update for batch processing
             """
-            if is_additive and existing_value:
+            if is_additive:
                 try:
-                    existing_val = float(existing_value.replace(',', '.')) if existing_value else 0
-                except ValueError:
+                    # Handle both None and 'None' string cases
+                    if existing_value and existing_value != 'None' and str(existing_value).strip():
+                        # Convert to string first, then replace comma with dot, then convert to float
+                        existing_val = float(str(existing_value).replace(',', '.'))
+                    else:
+                        existing_val = 0
+                except (ValueError, TypeError) as e:
                     existing_val = 0
+                
                 new_val = existing_val + text
-                updates.append((cell, locale.format_string("%.2f", new_val)))
+                formatted_val = locale.format_string("%.2f", new_val)
+                updates.append((cell, formatted_val))
             else:
                 if existing_value:
                     updates.append((cell, f"{existing_value}\n{text}"))
@@ -270,7 +264,22 @@ class SheetsClient:
                 # Use batch_get to get multiple cells at once
                 cell_list = [f"{cell}" for cell in cells]
                 result = new_worksheet.batch_get(cell_list)
-                return {cells[i]: result[0][i] if i < len(result[0]) else None for i in range(len(cells))}
+                
+                # batch_get returns a list of lists, where each inner list contains values for one range
+                # For individual cells, each cell gets its own list in the result
+                result_dict = {}
+                for i, cell in enumerate(cells):
+                    if i < len(result) and result[i] and len(result[i]) > 0:
+                        # Get the first (and only) value from the cell's result list
+                        cell_value = result[i][0] if result[i][0] else None
+                        # If the cell_value is still a list (shouldn't happen but just in case), get the first element
+                        if isinstance(cell_value, list) and len(cell_value) > 0:
+                            cell_value = cell_value[0]
+                        result_dict[cell] = cell_value
+                    else:
+                        result_dict[cell] = None
+                
+                return result_dict
             except Exception as e:
                 print(f"Error getting batch values: {e}")
                 return {cell: None for cell in cells}
@@ -289,6 +298,9 @@ class SheetsClient:
                 column_range[0] + row_range.split(":")[1],                # Private note cell
                 column_range[2] + row_range.split(":")[0]                 # Moving time cell
             ])
+        
+        # Add a small delay to ensure any previous updates are processed
+        time.sleep(0.2)
         
         existing_values = get_existing_values_batch(cells_to_check)
         
@@ -395,25 +407,63 @@ class SheetsClient:
             print("No worksheets found.")
             return None
         
+        print(f"Checking {len(worksheets)} worksheets with rate limiting...")
+        
         # Get all P4 and P7 values in one batch call per worksheet
         empty_worksheets = []
         for i, ws in enumerate(worksheets):
             try:
+                # Add rate limiting - wait 0.3 seconds between API calls to avoid 429 errors
+                if i > 0:  # Don't wait before the first call
+                    time.sleep(0.3)
+                
+                # Progress indicator every 10 worksheets
+                if i % 10 == 0:
+                    print(f"Progress: {i}/{len(worksheets)} worksheets checked...")
+                
                 # Get both P4 and P7 values in one API call
                 p4_p7_values = ws.batch_get(["P4", "P7"])
                 p4_value = p4_p7_values[0][0] if p4_p7_values[0] else None
                 p7_value = p4_p7_values[0][1] if len(p4_p7_values[0]) > 1 else None
                 
-                if p4_value and p7_value:
-                    print("Found non-empty P4/P7 worksheets:", worksheets[0:i])
-                    empty_worksheets = worksheets[0:i]
+                # Check if both P4 and P7 are empty (None, empty string, or "0")
+                p4_empty = not p4_value or p4_value == "" or p4_value == "0"
+                p7_empty = not p7_value or p7_value == "" or p7_value == "0"
+                
+                if p4_empty and p7_empty:
+                    empty_worksheets.append(ws)
+                else:
+                    print(f"Found non-empty P4/P7 in worksheet {ws.title} (P4: {p4_value}, P7: {p7_value})")
+                    # Stop when we find the first non-empty worksheet
                     break
                     
+            except APIError as e:
+                if e.code == 429:  # Rate limit exceeded
+                    print(f"Rate limit exceeded while checking worksheet {ws.title}. Waiting 60 seconds...")
+                    time.sleep(60)  # Wait 60 seconds for rate limit to reset
+                    # Retry the same worksheet
+                    try:
+                        p4_p7_values = ws.batch_get(["P4", "P7"])
+                        p4_value = p4_p7_values[0][0] if p4_p7_values[0] else None
+                        p7_value = p4_p7_values[0][1] if len(p4_p7_values[0]) > 1 else None
+                        
+                        p4_empty = not p4_value or p4_value == "" or p4_value == "0"
+                        p7_empty = not p7_value or p7_value == "" or p7_value == "0"
+                        
+                        if p4_empty and p7_empty:
+                            empty_worksheets.append(ws)
+                        else:
+                            print(f"Found non-empty P4/P7 in worksheet {ws.title} after retry (P4: {p4_value}, P7: {p7_value})")
+                            break
+                    except Exception as retry_e:
+                        print(f"Error retrying worksheet {ws.title}: {retry_e}")
+                        continue
+                else:
+                    print(f"Error checking worksheet {ws.title}: {e}")
+                    continue
             except Exception as e:
                 print(f"Error checking worksheet {ws.title}: {e}")
                 continue
         
-        if not empty_worksheets:
-            print("No non-empty P4/P7 worksheets found.")
-        
+        print(f"Found {len(empty_worksheets)} empty P4/P7 worksheets.")
         return empty_worksheets
