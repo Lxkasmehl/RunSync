@@ -211,6 +211,62 @@ def transfer_all_activities_not_yet_transferred_from_Strava_to_Garmin_without_st
         garmin_client.click_previous_button(driver, wait)
         time.sleep(3)
 
+def transfer_activities_from_Strava_to_Garmin_until_already_transferred(strava_client, garmin_client, driver, wait):
+    """
+    Transfers activities from Strava to Garmin until it encounters the first activity that has already been transferred.
+    Stops when it finds an activity where the Garmin title already matches the Strava title (indicating it was already transferred).
+    
+    Args:
+        strava_client (StravaClient): An instance of the StravaClient class.
+        garmin_client (GarminClient): An instance of the GarminClient class.
+        driver: The Selenium WebDriver instance.
+        wait: The WebDriverWait instance.
+    """
+    garmin_client.login(driver, wait)
+    garmin_client.open_activity_overview(driver, wait)
+    garmin_client.click_first_activity_in_overview(driver, wait)
+
+    all_activities = strava_client.get_all_activities_in_timeframe("2020-01-01 00:00:00",
+                                                                   datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+    while True:
+        date = garmin_client.get_date_time_from_activity(driver, wait)
+        date_str = date.strftime("%Y-%m-%dT%H:%M:%S")
+        print(f"Processing activity from {date} ({date_str})")
+
+        correspondingStravaActivityWoDetails = next((activity for activity in all_activities if datetime.strptime(activity['start_date_local'],"%Y-%m-%dT%H:%M:%SZ").replace(second=0).isoformat() == date_str), None)
+
+        if correspondingStravaActivityWoDetails is None:
+            print("No corresponding Strava activity found, stopping.")
+            break
+
+        garmin_activity_name = garmin_client.get_name_from_activity(driver, wait)
+        strava_activity_name = correspondingStravaActivityWoDetails['name']
+        
+        print(f"Garmin activity name: {garmin_activity_name}")
+        print(f"Strava activity name: {strava_activity_name}")
+
+        # Check if the activity has already been transferred (titles match)
+        if garmin_activity_name == strava_activity_name:
+            print(f"Activity already transferred (titles match): '{garmin_activity_name}' == '{strava_activity_name}'")
+            print("Stopping transfer process as we found an already transferred activity.")
+            break
+
+        # Skip workout activities that don't need to be transferred
+        if strava_activity_name in ['Afternoon Workout', 'Morning Workout', 'Evening Workout',
+                                   'Lunch Workout', 'Night Workout']:
+            print(f"Skipping workout activity: {strava_activity_name}")
+        else:
+            # Transfer the activity
+            print(f"Transferring activity: {strava_activity_name}")
+            correspondingStravaActivity = strava_client.get_strava_data_for_activity_with_specific_ID(
+                correspondingStravaActivityWoDetails['id'], False)
+            print(f"Strava activity data: {correspondingStravaActivity}")
+            garmin_client.edit_current_garmin_activity(driver, wait, correspondingStravaActivity)
+
+        garmin_client.click_previous_button(driver, wait)
+        time.sleep(3)
+
 def main():
     """
     The main function of the script.
@@ -227,7 +283,11 @@ def main():
 
     # update_p4_p7_worksheets(sheets_client, strava_client)
 
-    transfer_all_activities_not_yet_transferred_from_Strava_to_Garmin_without_stop(strava_client, garmin_client, driver, wait)
+    # Use the new function that stops when it finds an already transferred activity
+    transfer_activities_from_Strava_to_Garmin_until_already_transferred(strava_client, garmin_client, driver, wait)
+    
+    # Alternative: Use the original function that doesn't stop
+    # transfer_all_activities_not_yet_transferred_from_Strava_to_Garmin_without_stop(strava_client, garmin_client, driver, wait)
 
 if __name__ == "__main__":
     main()
