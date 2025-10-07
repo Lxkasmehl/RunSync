@@ -14,7 +14,22 @@ from gspread.utils import Dimension
 load_dotenv()
 
 # Create a Google Sheets client using the service account credentials
-sa = gspread.service_account(filename=os.getenv('FILE_PATH'))
+import json
+
+# Get service account credentials from environment variable
+file_path = os.getenv('FILE_PATH')
+if file_path and os.path.exists(file_path):
+    # If FILE_PATH is a file path, read from file
+    sa = gspread.service_account(filename=file_path)
+else:
+    # If FILE_PATH is JSON content directly, parse it
+    service_account_info = os.getenv('SERVICE_ACCOUNT_JSON')
+    if service_account_info:
+        credentials_dict = json.loads(service_account_info)
+        sa = gspread.service_account_from_dict(credentials_dict)
+    else:
+        raise ValueError("Either FILE_PATH (file path) or SERVICE_ACCOUNT_JSON (JSON content) must be provided")
+
 sh = sa.open(os.getenv('DOCUMENT_NAME'))
 
 # Set the locale to German for date formatting

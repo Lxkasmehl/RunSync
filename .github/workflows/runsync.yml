@@ -59,7 +59,7 @@ jobs:
       - name: Run Update Activities Task
         if: github.event.inputs.task_type == 'update_activities'
         env:
-          FILE_PATH: ${{ secrets.FILE_PATH }}
+          SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
           DOCUMENT_NAME: ${{ secrets.DOCUMENT_NAME }}
           CLIENT_ID: ${{ secrets.CLIENT_ID }}
           CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
@@ -84,7 +84,7 @@ jobs:
       - name: Run Update P4/P7 Worksheets Task
         if: github.event.inputs.task_type == 'update_p4_p7'
         env:
-          FILE_PATH: ${{ secrets.FILE_PATH }}
+          SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
           DOCUMENT_NAME: ${{ secrets.DOCUMENT_NAME }}
           CLIENT_ID: ${{ secrets.CLIENT_ID }}
           CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
@@ -109,7 +109,7 @@ jobs:
       - name: Run Garmin Transfer with Stop Task
         if: github.event.inputs.task_type == 'transfer_garmin_stop'
         env:
-          FILE_PATH: ${{ secrets.FILE_PATH }}
+          SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
           DOCUMENT_NAME: ${{ secrets.DOCUMENT_NAME }}
           GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
           GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
@@ -151,7 +151,7 @@ jobs:
       - name: Run Garmin Transfer without Stop Task
         if: github.event.inputs.task_type == 'transfer_garmin_no_stop'
         env:
-          FILE_PATH: ${{ secrets.FILE_PATH }}
+          SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
           DOCUMENT_NAME: ${{ secrets.DOCUMENT_NAME }}
           GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
           GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
