@@ -6,7 +6,7 @@ google-auth
 google-auth-oauthlib
 google-auth-httplib2
 selenium
-undetected-chromedriver
+undetected-chromedriver>=3.5.5
 python-dotenv
 python-dateutil
 gspread

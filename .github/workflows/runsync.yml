@@ -142,8 +142,30 @@ jobs:
           options.add_argument('--disable-images')
           options.add_argument('--disable-javascript')
 
-          # Use undetected_chromedriver with version_main parameter
-          driver = uc.Chrome(options=options, version_main=None)
+          # Use undetected_chromedriver with manual ChromeDriver management
+          import os
+          import subprocess
+
+          # Get Chrome version
+          chrome_version = subprocess.check_output(['google-chrome', '--version']).decode('utf-8').strip()
+          print(f"Chrome version: {chrome_version}")
+
+          # Extract major version number
+          major_version = chrome_version.split()[2].split('.')[0]
+          print(f"Chrome major version: {major_version}")
+
+          try:
+              # Try with the detected major version
+              driver = uc.Chrome(options=options, version_main=int(major_version))
+          except Exception as e:
+              print(f"Failed with version {major_version}: {e}")
+              try:
+                  # Try with auto-detection as fallback
+                  driver = uc.Chrome(options=options, version_main=None)
+              except Exception as e2:
+                  print(f"Auto-detection also failed: {e2}")
+                  # Try with a slightly older version
+                  driver = uc.Chrome(options=options, version_main=int(major_version) - 1)
           wait = WebDriverWait(driver, 20)
 
           try:
@@ -189,8 +211,30 @@ jobs:
           options.add_argument('--disable-images')
           options.add_argument('--disable-javascript')
 
-          # Use undetected_chromedriver with version_main parameter
-          driver = uc.Chrome(options=options, version_main=None)
+          # Use undetected_chromedriver with manual ChromeDriver management
+          import os
+          import subprocess
+
+          # Get Chrome version
+          chrome_version = subprocess.check_output(['google-chrome', '--version']).decode('utf-8').strip()
+          print(f"Chrome version: {chrome_version}")
+
+          # Extract major version number
+          major_version = chrome_version.split()[2].split('.')[0]
+          print(f"Chrome major version: {major_version}")
+
+          try:
+              # Try with the detected major version
+              driver = uc.Chrome(options=options, version_main=int(major_version))
+          except Exception as e:
+              print(f"Failed with version {major_version}: {e}")
+              try:
+                  # Try with auto-detection as fallback
+                  driver = uc.Chrome(options=options, version_main=None)
+              except Exception as e2:
+                  print(f"Auto-detection also failed: {e2}")
+                  # Try with a slightly older version
+                  driver = uc.Chrome(options=options, version_main=int(major_version) - 1)
           wait = WebDriverWait(driver, 20)
 
           try:
