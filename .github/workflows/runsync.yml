@@ -130,17 +130,7 @@ jobs:
           strava_client = StravaClient()
           garmin_client = GarminClient()
 
-          # Set up Chrome in headless mode for GitHub Actions
-          options = uc.ChromeOptions()
-          options.add_argument('--headless')
-          options.add_argument('--no-sandbox')
-          options.add_argument('--disable-dev-shm-usage')
-          options.add_argument('--disable-gpu')
-          options.add_argument('--window-size=1920,1080')
-          options.add_argument('--disable-extensions')
-          options.add_argument('--disable-plugins')
-          options.add_argument('--disable-images')
-          options.add_argument('--disable-javascript')
+          # Chrome options will be created fresh for each attempt
 
           # Use undetected_chromedriver with manual ChromeDriver management
           import os
@@ -154,18 +144,59 @@ jobs:
           major_version = chrome_version.split()[2].split('.')[0]
           print('Chrome major version:', major_version)
 
+          driver = None
           try:
+              # Create fresh options for each attempt
+              options1 = uc.ChromeOptions()
+              options1.add_argument('--headless')
+              options1.add_argument('--no-sandbox')
+              options1.add_argument('--disable-dev-shm-usage')
+              options1.add_argument('--disable-gpu')
+              options1.add_argument('--window-size=1920,1080')
+              options1.add_argument('--disable-extensions')
+              options1.add_argument('--disable-plugins')
+              options1.add_argument('--disable-images')
+              options1.add_argument('--disable-javascript')
+              
               # Try with the detected major version
-              driver = uc.Chrome(options=options, version_main=int(major_version))
+              driver = uc.Chrome(options=options1, version_main=int(major_version))
           except Exception as e:
               print('Failed with version', major_version, ':', str(e))
               try:
+                  # Create fresh options for second attempt
+                  options2 = uc.ChromeOptions()
+                  options2.add_argument('--headless')
+                  options2.add_argument('--no-sandbox')
+                  options2.add_argument('--disable-dev-shm-usage')
+                  options2.add_argument('--disable-gpu')
+                  options2.add_argument('--window-size=1920,1080')
+                  options2.add_argument('--disable-extensions')
+                  options2.add_argument('--disable-plugins')
+                  options2.add_argument('--disable-images')
+                  options2.add_argument('--disable-javascript')
+                  
                   # Try with auto-detection as fallback
-                  driver = uc.Chrome(options=options, version_main=None)
+                  driver = uc.Chrome(options=options2, version_main=None)
               except Exception as e2:
                   print('Auto-detection also failed:', str(e2))
-                  # Try with a slightly older version
-                  driver = uc.Chrome(options=options, version_main=int(major_version) - 1)
+                  try:
+                      # Create fresh options for third attempt
+                      options3 = uc.ChromeOptions()
+                      options3.add_argument('--headless')
+                      options3.add_argument('--no-sandbox')
+                      options3.add_argument('--disable-dev-shm-usage')
+                      options3.add_argument('--disable-gpu')
+                      options3.add_argument('--window-size=1920,1080')
+                      options3.add_argument('--disable-extensions')
+                      options3.add_argument('--disable-plugins')
+                      options3.add_argument('--disable-images')
+                      options3.add_argument('--disable-javascript')
+                      
+                      # Try with a slightly older version
+                      driver = uc.Chrome(options=options3, version_main=int(major_version) - 1)
+                  except Exception as e3:
+                      print('All attempts failed:', str(e3))
+                      raise
           wait = WebDriverWait(driver, 20)
 
           try:
@@ -199,17 +230,7 @@ jobs:
           strava_client = StravaClient()
           garmin_client = GarminClient()
 
-          # Set up Chrome in headless mode for GitHub Actions
-          options = uc.ChromeOptions()
-          options.add_argument('--headless')
-          options.add_argument('--no-sandbox')
-          options.add_argument('--disable-dev-shm-usage')
-          options.add_argument('--disable-gpu')
-          options.add_argument('--window-size=1920,1080')
-          options.add_argument('--disable-extensions')
-          options.add_argument('--disable-plugins')
-          options.add_argument('--disable-images')
-          options.add_argument('--disable-javascript')
+          # Chrome options will be created fresh for each attempt
 
           # Use undetected_chromedriver with manual ChromeDriver management
           import os
@@ -223,18 +244,59 @@ jobs:
           major_version = chrome_version.split()[2].split('.')[0]
           print('Chrome major version:', major_version)
 
+          driver = None
           try:
+              # Create fresh options for each attempt
+              options1 = uc.ChromeOptions()
+              options1.add_argument('--headless')
+              options1.add_argument('--no-sandbox')
+              options1.add_argument('--disable-dev-shm-usage')
+              options1.add_argument('--disable-gpu')
+              options1.add_argument('--window-size=1920,1080')
+              options1.add_argument('--disable-extensions')
+              options1.add_argument('--disable-plugins')
+              options1.add_argument('--disable-images')
+              options1.add_argument('--disable-javascript')
+              
               # Try with the detected major version
-              driver = uc.Chrome(options=options, version_main=int(major_version))
+              driver = uc.Chrome(options=options1, version_main=int(major_version))
           except Exception as e:
               print('Failed with version', major_version, ':', str(e))
               try:
+                  # Create fresh options for second attempt
+                  options2 = uc.ChromeOptions()
+                  options2.add_argument('--headless')
+                  options2.add_argument('--no-sandbox')
+                  options2.add_argument('--disable-dev-shm-usage')
+                  options2.add_argument('--disable-gpu')
+                  options2.add_argument('--window-size=1920,1080')
+                  options2.add_argument('--disable-extensions')
+                  options2.add_argument('--disable-plugins')
+                  options2.add_argument('--disable-images')
+                  options2.add_argument('--disable-javascript')
+                  
                   # Try with auto-detection as fallback
-                  driver = uc.Chrome(options=options, version_main=None)
+                  driver = uc.Chrome(options=options2, version_main=None)
               except Exception as e2:
                   print('Auto-detection also failed:', str(e2))
-                  # Try with a slightly older version
-                  driver = uc.Chrome(options=options, version_main=int(major_version) - 1)
+                  try:
+                      # Create fresh options for third attempt
+                      options3 = uc.ChromeOptions()
+                      options3.add_argument('--headless')
+                      options3.add_argument('--no-sandbox')
+                      options3.add_argument('--disable-dev-shm-usage')
+                      options3.add_argument('--disable-gpu')
+                      options3.add_argument('--window-size=1920,1080')
+                      options3.add_argument('--disable-extensions')
+                      options3.add_argument('--disable-plugins')
+                      options3.add_argument('--disable-images')
+                      options3.add_argument('--disable-javascript')
+                      
+                      # Try with a slightly older version
+                      driver = uc.Chrome(options=options3, version_main=int(major_version) - 1)
+                  except Exception as e3:
+                      print('All attempts failed:', str(e3))
+                      raise
           wait = WebDriverWait(driver, 20)
 
           try:
