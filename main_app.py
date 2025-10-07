@@ -192,10 +192,13 @@ def transfer_all_activities_not_yet_transferred_from_Strava_to_Garmin_without_st
     all_activities = strava_client.get_all_activities_in_timeframe("2020-01-01 00:00:00",
                                                                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
+    activity_count = 0
     while True:
+        activity_count += 1
+        print(f"\n=== Processing Activity #{activity_count} ===")
         date = garmin_client.get_date_time_from_activity(driver, wait)
         date_str = date.strftime("%Y-%m-%dT%H:%M:%S")
-        print(date, date_str)
+        print(f"Activity date: {date} ({date_str})")
 
         correspondingStravaActivityWoDetails = next((activity for activity in all_activities if datetime.strptime(activity['start_date_local'],"%Y-%m-%dT%H:%M:%SZ").replace(second=0).isoformat() == date_str), None)
 
@@ -209,7 +212,7 @@ def transfer_all_activities_not_yet_transferred_from_Strava_to_Garmin_without_st
             garmin_client.edit_current_garmin_activity(driver, wait, correspondingStravaActivity)
 
         garmin_client.click_previous_button(driver, wait)
-        time.sleep(3)
+        time.sleep(5)  # Increased wait time between activities
 
 def transfer_activities_from_Strava_to_Garmin_until_already_transferred(strava_client, garmin_client, driver, wait):
     """
@@ -265,7 +268,7 @@ def transfer_activities_from_Strava_to_Garmin_until_already_transferred(strava_c
             garmin_client.edit_current_garmin_activity(driver, wait, correspondingStravaActivity)
 
         garmin_client.click_previous_button(driver, wait)
-        time.sleep(3)
+        time.sleep(5)  # Increased wait time between activities
 
 def main():
     """

@@ -21,6 +21,7 @@ on:
 jobs:
   runsync-task:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
 
     steps:
       - name: Checkout code
@@ -207,7 +208,7 @@ jobs:
                   except Exception as e3:
                       print('All attempts failed:', str(e3))
                       raise
-          wait = WebDriverWait(driver, 20)
+          wait = WebDriverWait(driver, 60)  # Increased timeout to 60 seconds
 
           try:
               transfer_activities_from_Strava_to_Garmin_until_already_transferred(strava_client, garmin_client, driver, wait)
@@ -317,7 +318,7 @@ jobs:
                   except Exception as e3:
                       print('All attempts failed:', str(e3))
                       raise
-          wait = WebDriverWait(driver, 20)
+          wait = WebDriverWait(driver, 60)  # Increased timeout to 60 seconds
 
           try:
               print('Starting Garmin transfer process...')
