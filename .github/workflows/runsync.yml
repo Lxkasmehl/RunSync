@@ -333,7 +333,7 @@ jobs:
               exit(1)
           finally:
               if driver:
-              driver.quit()
+                  driver.quit()
           "
 
       - name: Task completed
