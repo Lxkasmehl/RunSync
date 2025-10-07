@@ -43,6 +43,8 @@ jobs:
           echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
           sudo apt-get update
           sudo apt-get install -y google-chrome-stable
+          # Get Chrome version for debugging
+          google-chrome --version
 
       - name: Install Python dependencies
         run: |
@@ -135,8 +137,13 @@ jobs:
           options.add_argument('--disable-dev-shm-usage')
           options.add_argument('--disable-gpu')
           options.add_argument('--window-size=1920,1080')
+          options.add_argument('--disable-extensions')
+          options.add_argument('--disable-plugins')
+          options.add_argument('--disable-images')
+          options.add_argument('--disable-javascript')
 
-          driver = uc.Chrome(options=options)
+          # Use undetected_chromedriver with version_main parameter
+          driver = uc.Chrome(options=options, version_main=None)
           wait = WebDriverWait(driver, 20)
 
           try:
@@ -177,8 +184,13 @@ jobs:
           options.add_argument('--disable-dev-shm-usage')
           options.add_argument('--disable-gpu')
           options.add_argument('--window-size=1920,1080')
+          options.add_argument('--disable-extensions')
+          options.add_argument('--disable-plugins')
+          options.add_argument('--disable-images')
+          options.add_argument('--disable-javascript')
 
-          driver = uc.Chrome(options=options)
+          # Use undetected_chromedriver with version_main parameter
+          driver = uc.Chrome(options=options, version_main=None)
           wait = WebDriverWait(driver, 20)
 
           try:
