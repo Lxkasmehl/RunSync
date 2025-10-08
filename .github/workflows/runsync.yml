@@ -6,11 +6,10 @@ on:
       task_type:
         description: "Task to run"
         required: true
-        default: "update_activities"
+        default: "update_sheets_data"
         type: choice
         options:
-          - update_activities
-          - update_p4_p7
+          - update_sheets_data
           - transfer_garmin_stop
           - transfer_garmin_no_stop
       password:
@@ -60,17 +59,17 @@ jobs:
           fi
           echo "✅ Password verified"
 
-      - name: Run Update Activities Task
-        if: github.event.inputs.task_type == 'update_activities'
+      - name: Run Update Sheets Data Task
+        if: github.event.inputs.task_type == 'update_sheets_data'
         env:
           SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
           DOCUMENT_NAME: ${{ secrets.DOCUMENT_NAME }}
           CLIENT_ID: ${{ secrets.CLIENT_ID }}
           CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
         run: |
-          echo "🚀 Starting Update Activities Task..."
+          echo "🚀 Starting Update Sheets Data Task..."
           python -c "
-          from main_app import update_activities_since_first_not_completed_day
+          from main_app import update_activities_since_first_not_completed_day, update_p4_p7_worksheets
           from strava_client import StravaClient
           from sheets_client import SheetsClient
 
@@ -78,35 +77,17 @@ jobs:
           sheets_client = SheetsClient()
 
           try:
+              print('📊 Updating activities...')
               update_activities_since_first_not_completed_day(sheets_client, strava_client)
-              print('✅ Update Activities Task completed successfully!')
-          except Exception as e:
-              print(f'❌ Update Activities Task failed: {e}')
-              exit(1)
-          "
-
-      - name: Run Update P4/P7 Worksheets Task
-        if: github.event.inputs.task_type == 'update_p4_p7'
-        env:
-          SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
-          DOCUMENT_NAME: ${{ secrets.DOCUMENT_NAME }}
-          CLIENT_ID: ${{ secrets.CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
-        run: |
-          echo "🚀 Starting Update P4/P7 Worksheets Task..."
-          python -c "
-          from main_app import update_p4_p7_worksheets
-          from strava_client import StravaClient
-          from sheets_client import SheetsClient
-
-          strava_client = StravaClient()
-          sheets_client = SheetsClient()
-
-          try:
+              print('✅ Activities updated successfully!')
+              
+              print('📊 Updating P4/P7 worksheets...')
               update_p4_p7_worksheets(sheets_client, strava_client)
-              print('✅ Update P4/P7 Worksheets Task completed successfully!')
+              print('✅ P4/P7 worksheets updated successfully!')
+              
+              print('✅ Update Sheets Data Task completed successfully!')
           except Exception as e:
-              print(f'❌ Update P4/P7 Worksheets Task failed: {e}')
+              print(f'❌ Update Sheets Data Task failed: {e}')
               exit(1)
           "
 
