@@ -157,9 +157,11 @@ jobs:
               options1.add_argument('--disable-extensions')
               options1.add_argument('--disable-plugins')
               options1.add_argument('--disable-images')
-              options1.add_argument('--disable-javascript')
               options1.add_argument('--timeout=30000')
               options1.add_argument('--page-load-strategy=normal')
+              options1.add_argument('--disable-blink-features=AutomationControlled')
+              options1.add_experimental_option("excludeSwitches", ["enable-automation"])
+              options1.add_experimental_option('useAutomationExtension', False)
               
               # Try with the detected major version
               print('Attempting to start ChromeDriver with version', major_version_int)
@@ -206,7 +208,7 @@ jobs:
                   except Exception as e3:
                       print('All attempts failed:', str(e3))
                       raise
-          wait = WebDriverWait(driver, 60)  # Increased timeout to 60 seconds
+          wait = WebDriverWait(driver, 120)  # Increased timeout to 120 seconds for Garmin
 
           try:
               print('Starting Garmin transfer process...')
@@ -291,9 +293,11 @@ jobs:
               options1.add_argument('--disable-extensions')
               options1.add_argument('--disable-plugins')
               options1.add_argument('--disable-images')
-              options1.add_argument('--disable-javascript')
               options1.add_argument('--timeout=30000')
               options1.add_argument('--page-load-strategy=normal')
+              options1.add_argument('--disable-blink-features=AutomationControlled')
+              options1.add_experimental_option("excludeSwitches", ["enable-automation"])
+              options1.add_experimental_option('useAutomationExtension', False)
               
               # Try with the detected major version
               print('Attempting to start ChromeDriver with version', major_version_int)
@@ -340,7 +344,7 @@ jobs:
                   except Exception as e3:
                       print('All attempts failed:', str(e3))
                       raise
-          wait = WebDriverWait(driver, 60)  # Increased timeout to 60 seconds
+          wait = WebDriverWait(driver, 120)  # Increased timeout to 120 seconds for Garmin
 
           try:
               print('Starting Garmin transfer process...')

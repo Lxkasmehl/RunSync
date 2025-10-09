@@ -20,15 +20,153 @@ load_dotenv()
 
 class GarminClient:
     def login(self, driver, wait):
-        driver.get('https://connect.garmin.com/signin/')
-
-        wait.until(EC.visibility_of_element_located((By.ID, 'email'))).send_keys(
-            os.getenv('GARMIN_EMAIL'))  # userame/email
-        wait.until(EC.visibility_of_element_located((By.ID, 'password'))).send_keys(
-            os.getenv('GARMIN_PASSWORD'))  # password
-        wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@class='g__button g__button--contained "
-                                                         "g__button--contained--large g__button--contained--ocean-blue' "
-                                                         "and @data-testid='g__button' and @type='submit']"))).click()
+        try:
+            print("Navigating to Garmin login page...")
+            # Try multiple possible login URLs
+            login_urls = [
+                'https://connect.garmin.com/signin/',
+                'https://connect.garmin.com/modern/',
+                'https://connect.garmin.com/',
+                'https://sso.garmin.com/sso/signin'
+            ]
+            
+            for url in login_urls:
+                try:
+                    print(f"Trying URL: {url}")
+                    driver.get(url)
+                    time.sleep(2)
+                    
+                    # Check if we got a valid login page
+                    current_url = driver.current_url
+                    page_source = driver.page_source.lower()
+                    
+                    if 'email' in page_source and 'password' in page_source:
+                        print(f"Found valid login page at: {current_url}")
+                        break
+                    else:
+                        print(f"URL {url} does not appear to be a login page")
+                        continue
+                except Exception as e:
+                    print(f"Error accessing {url}: {e}")
+                    continue
+            else:
+                # If we get here, none of the URLs worked
+                raise Exception("Could not access any valid Garmin login page")
+            
+            # Wait for page to load completely
+            print("Waiting for page to load...")
+            wait.until(lambda driver: driver.execute_script("return document.readyState") == "complete")
+            
+            # Wait a bit more for dynamic content to load
+            time.sleep(3)
+            
+            # Check if we're on the right page
+            current_url = driver.current_url
+            print(f"Current URL after navigation: {current_url}")
+            
+            # Check if there are any error messages or if the page loaded correctly
+            try:
+                page_title = driver.title
+                print(f"Page title: {page_title}")
+            except:
+                print("Could not get page title")
+            
+            # Check if the page contains expected elements
+            try:
+                page_source = driver.page_source
+                if 'email' not in page_source.lower() or 'password' not in page_source.lower():
+                    print("Warning: Page may not have loaded correctly - missing expected form elements")
+                    driver.save_screenshot('garmin_page_load_issue.png')
+                    print("Screenshot saved as garmin_page_load_issue.png")
+            except:
+                print("Could not check page source")
+            
+            print("Looking for email field...")
+            email_field = wait.until(EC.visibility_of_element_located((By.ID, 'email')))
+            print("Email field found, entering credentials...")
+            email_field.clear()
+            email_field.send_keys(os.getenv('GARMIN_EMAIL'))
+            
+            print("Looking for password field...")
+            password_field = wait.until(EC.visibility_of_element_located((By.ID, 'password')))
+            print("Password field found, entering password...")
+            password_field.clear()
+            password_field.send_keys(os.getenv('GARMIN_PASSWORD'))
+            
+            print("Looking for login button...")
+            # Try multiple possible selectors for the login button
+            login_button = None
+            button_selectors = [
+                "//button[@class='g__button g__button--contained g__button--contained--large g__button--contained--ocean-blue' and @data-testid='g__button' and @type='submit']",
+                "//button[@type='submit']",
+                "//input[@type='submit']",
+                "//button[contains(@class, 'g__button') and contains(@class, 'g__button--contained')]",
+                "//button[contains(text(), 'Sign In')]",
+                "//button[contains(text(), 'Login')]",
+                "//button[contains(text(), 'Log In')]"
+            ]
+            
+            for selector in button_selectors:
+                try:
+                    print(f"Trying selector: {selector}")
+                    login_button = wait.until(EC.element_to_be_clickable((By.XPATH, selector)))
+                    print(f"Found login button with selector: {selector}")
+                    break
+                except:
+                    print(f"Selector failed: {selector}")
+                    continue
+            
+            if login_button is None:
+                raise Exception("Could not find login button with any of the tried selectors")
+            
+            print("Clicking login button...")
+            login_button.click()
+            
+            # Wait for login to complete (look for redirect or success indicators)
+            print("Waiting for login to complete...")
+            time.sleep(5)
+            
+            # Check for potential CAPTCHA or security challenges
+            try:
+                captcha_elements = driver.find_elements(By.XPATH, "//*[contains(text(), 'captcha') or contains(text(), 'CAPTCHA') or contains(text(), 'verify') or contains(text(), 'security')]")
+                if captcha_elements:
+                    print("Warning: Potential CAPTCHA or security challenge detected")
+                    driver.save_screenshot('garmin_captcha_detected.png')
+                    print("Screenshot saved as garmin_captcha_detected.png")
+            except:
+                pass
+            
+            # Check if we're still on the login page (indicating login failed)
+            current_url = driver.current_url
+            print(f"URL after login attempt: {current_url}")
+            
+            if 'signin' in current_url.lower() or 'login' in current_url.lower():
+                print("Still on login page, login may have failed")
+                # Check for error messages
+                try:
+                    error_elements = driver.find_elements(By.XPATH, "//*[contains(@class, 'error') or contains(@class, 'alert') or contains(text(), 'invalid') or contains(text(), 'incorrect')]")
+                    if error_elements:
+                        for element in error_elements:
+                            print(f"Error message found: {element.text}")
+                except:
+                    pass
+                
+                # Take a screenshot for debugging
+                driver.save_screenshot('garmin_login_failed.png')
+                print("Screenshot saved as garmin_login_failed.png")
+                raise Exception("Login failed - still on login page after attempt")
+            else:
+                print(f"Login successful, redirected to: {current_url}")
+                
+        except Exception as e:
+            print(f"Error during Garmin login: {e}")
+            # Take a screenshot for debugging
+            try:
+                driver.save_screenshot('garmin_login_error.png')
+                print("Screenshot saved as garmin_login_error.png")
+            except:
+                pass
+            raise
 
     def click_element(self, driver, wait, p_element):
         max_retries = 3
