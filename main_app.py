@@ -202,6 +202,12 @@ def transfer_all_activities_not_yet_transferred_from_Strava_to_Garmin_without_st
 
         correspondingStravaActivityWoDetails = next((activity for activity in all_activities if datetime.strptime(activity['start_date_local'],"%Y-%m-%dT%H:%M:%SZ").replace(second=0).isoformat() == date_str), None)
 
+        if correspondingStravaActivityWoDetails is None:
+            print("No corresponding Strava activity found, skipping.")
+            garmin_client.click_previous_button(driver, wait)
+            time.sleep(5)
+            continue
+
         if (correspondingStravaActivityWoDetails['name'] not in ['Afternoon Workout', 'Morning Workout', 'Evening Workout',
                                                         'Lunch Workout', 'Night Workout']) and (
                 garmin_client.get_name_from_activity(driver, wait) != correspondingStravaActivityWoDetails['name']):

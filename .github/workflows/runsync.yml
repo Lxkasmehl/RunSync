@@ -126,9 +126,24 @@ jobs:
           chrome_version = subprocess.check_output(['google-chrome', '--version']).decode('utf-8').strip()
           print('Chrome version:', chrome_version)
 
-          # Extract major version number
-          major_version = chrome_version.split()[2].split('.')[0]
+          # Extract major version number - handle different Chrome version formats
+          version_parts = chrome_version.split()
+          if len(version_parts) >= 3:
+              # Format: "Google Chrome 140.0.7339.0"
+              major_version = version_parts[2].split('.')[0]
+          else:
+              # Fallback format
+              major_version = chrome_version.split('.')[0].split()[-1]
           print('Chrome major version:', major_version)
+
+          # Validate that we got a valid version number
+          try:
+              major_version_int = int(major_version)
+              print('Parsed major version as integer:', major_version_int)
+          except ValueError:
+              print('Failed to parse major version, using fallback version 140')
+              major_version = '140'
+              major_version_int = 140
 
           driver = None
           try:
@@ -145,9 +160,9 @@ jobs:
               options1.add_argument('--disable-javascript')
               
               # Try with the detected major version
-              print('Attempting to start ChromeDriver with version', major_version)
-              driver = uc.Chrome(options=options1, version_main=int(major_version))
-              print('ChromeDriver started successfully with version', major_version)
+              print('Attempting to start ChromeDriver with version', major_version_int)
+              driver = uc.Chrome(options=options1, version_main=major_version_int)
+              print('ChromeDriver started successfully with version', major_version_int)
           except Exception as e:
               print('Failed with version', major_version, ':', str(e))
               try:
@@ -183,9 +198,9 @@ jobs:
                       options3.add_argument('--disable-javascript')
                       
                       # Try with a slightly older version
-                      print('Attempting to start ChromeDriver with version', int(major_version) - 1)
-                      driver = uc.Chrome(options=options3, version_main=int(major_version) - 1)
-                      print('ChromeDriver started successfully with version', int(major_version) - 1)
+                      print('Attempting to start ChromeDriver with version', major_version_int - 1)
+                      driver = uc.Chrome(options=options3, version_main=major_version_int - 1)
+                      print('ChromeDriver started successfully with version', major_version_int - 1)
                   except Exception as e3:
                       print('All attempts failed:', str(e3))
                       raise
@@ -236,9 +251,24 @@ jobs:
           chrome_version = subprocess.check_output(['google-chrome', '--version']).decode('utf-8').strip()
           print('Chrome version:', chrome_version)
 
-          # Extract major version number
-          major_version = chrome_version.split()[2].split('.')[0]
+          # Extract major version number - handle different Chrome version formats
+          version_parts = chrome_version.split()
+          if len(version_parts) >= 3:
+              # Format: "Google Chrome 140.0.7339.0"
+              major_version = version_parts[2].split('.')[0]
+          else:
+              # Fallback format
+              major_version = chrome_version.split('.')[0].split()[-1]
           print('Chrome major version:', major_version)
+
+          # Validate that we got a valid version number
+          try:
+              major_version_int = int(major_version)
+              print('Parsed major version as integer:', major_version_int)
+          except ValueError:
+              print('Failed to parse major version, using fallback version 140')
+              major_version = '140'
+              major_version_int = 140
 
           driver = None
           try:
@@ -255,9 +285,9 @@ jobs:
               options1.add_argument('--disable-javascript')
               
               # Try with the detected major version
-              print('Attempting to start ChromeDriver with version', major_version)
-              driver = uc.Chrome(options=options1, version_main=int(major_version))
-              print('ChromeDriver started successfully with version', major_version)
+              print('Attempting to start ChromeDriver with version', major_version_int)
+              driver = uc.Chrome(options=options1, version_main=major_version_int)
+              print('ChromeDriver started successfully with version', major_version_int)
           except Exception as e:
               print('Failed with version', major_version, ':', str(e))
               try:
@@ -293,9 +323,9 @@ jobs:
                       options3.add_argument('--disable-javascript')
                       
                       # Try with a slightly older version
-                      print('Attempting to start ChromeDriver with version', int(major_version) - 1)
-                      driver = uc.Chrome(options=options3, version_main=int(major_version) - 1)
-                      print('ChromeDriver started successfully with version', int(major_version) - 1)
+                      print('Attempting to start ChromeDriver with version', major_version_int - 1)
+                      driver = uc.Chrome(options=options3, version_main=major_version_int - 1)
+                      print('ChromeDriver started successfully with version', major_version_int - 1)
                   except Exception as e3:
                       print('All attempts failed:', str(e3))
                       raise
