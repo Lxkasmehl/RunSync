@@ -158,6 +158,8 @@ jobs:
               options1.add_argument('--disable-plugins')
               options1.add_argument('--disable-images')
               options1.add_argument('--disable-javascript')
+              options1.add_argument('--timeout=30000')
+              options1.add_argument('--page-load-strategy=normal')
               
               # Try with the detected major version
               print('Attempting to start ChromeDriver with version', major_version_int)
@@ -207,13 +209,20 @@ jobs:
           wait = WebDriverWait(driver, 60)  # Increased timeout to 60 seconds
 
           try:
+              print('Starting Garmin transfer process...')
               transfer_activities_from_Strava_to_Garmin_until_already_transferred(strava_client, garmin_client, driver, wait)
               print('✅ Garmin Transfer with Stop Task completed successfully!')
           except Exception as e:
-              print(f'❌ Garmin Transfer with Stop Task failed: {e}')
+              print('❌ Garmin Transfer with Stop Task failed:')
+              print('Error type:', type(e).__name__)
+              print('Error message:', str(e))
+              import traceback
+              print('Full traceback:')
+              traceback.print_exc()
               exit(1)
           finally:
-              driver.quit()
+              if driver:
+                  driver.quit()
           "
 
       - name: Run Garmin Transfer without Stop Task
@@ -283,6 +292,8 @@ jobs:
               options1.add_argument('--disable-plugins')
               options1.add_argument('--disable-images')
               options1.add_argument('--disable-javascript')
+              options1.add_argument('--timeout=30000')
+              options1.add_argument('--page-load-strategy=normal')
               
               # Try with the detected major version
               print('Attempting to start ChromeDriver with version', major_version_int)

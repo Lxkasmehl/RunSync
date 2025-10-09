@@ -115,17 +115,28 @@ class StravaClient:
         except Exception as e:
             # If the request fails, refresh the token and try again
             print(f"Request failed with error: {e}")
-            access_token = self.refresh_token()
-            session = OAuth2Session(client_id=self.client_id, token={"access_token": access_token})
-            page = 1
-            while True:
-                response = session.get(
-                    f"{self.athlete_activities_url}?before={end_timestamp}&after={start_timestamp}&page={page}&per_page=200")
-                response.raise_for_status()
-                activities.extend(response.json())
-                if len(response.json()) < 200:
-                    break
-                page += 1
+            print(f"Error type: {type(e).__name__}")
+            try:
+                access_token = self.refresh_token()
+                if access_token is None:
+                    print("❌ Failed to refresh token, attempting re-authentication...")
+                    access_token = self.authenticate()
+                
+                session = OAuth2Session(client_id=self.client_id, token={"access_token": access_token})
+                page = 1
+                while True:
+                    response = session.get(
+                        f"{self.athlete_activities_url}?before={end_timestamp}&after={start_timestamp}&page={page}&per_page=200")
+                    response.raise_for_status()
+                    activities.extend(response.json())
+                    if len(response.json()) < 200:
+                        break
+                    page += 1
+                print(f"✅ Successfully fetched activities after token refresh")
+            except Exception as e2:
+                print(f"❌ Failed to fetch activities even after token refresh: {e2}")
+                print(f"Second error type: {type(e2).__name__}")
+                raise
         
         return activities
 

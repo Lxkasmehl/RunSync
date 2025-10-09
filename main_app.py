@@ -231,19 +231,52 @@ def transfer_activities_from_Strava_to_Garmin_until_already_transferred(strava_c
         driver: The Selenium WebDriver instance.
         wait: The WebDriverWait instance.
     """
-    garmin_client.login(driver, wait)
-    garmin_client.open_activity_overview(driver, wait)
-    garmin_client.click_first_activity_in_overview(driver, wait)
+    try:
+        print("Step 1: Logging into Garmin...")
+        garmin_client.login(driver, wait)
+        print("✅ Garmin login successful")
+        
+        print("Step 2: Opening activity overview...")
+        garmin_client.open_activity_overview(driver, wait)
+        print("✅ Activity overview opened")
+        
+        print("Step 3: Clicking first activity...")
+        garmin_client.click_first_activity_in_overview(driver, wait)
+        print("✅ First activity clicked")
+    except Exception as e:
+        print(f"❌ Error during Garmin setup: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
-    all_activities = strava_client.get_all_activities_in_timeframe("2020-01-01 00:00:00",
-                                                                   datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    try:
+        print("Step 4: Fetching Strava activities...")
+        all_activities = strava_client.get_all_activities_in_timeframe("2020-01-01 00:00:00",
+                                                                       datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        print(f"✅ Fetched {len(all_activities)} Strava activities")
+    except Exception as e:
+        print(f"❌ Error fetching Strava activities: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
+    activity_count = 0
     while True:
-        date = garmin_client.get_date_time_from_activity(driver, wait)
-        date_str = date.strftime("%Y-%m-%dT%H:%M:%S")
-        print(f"Processing activity from {date} ({date_str})")
+        try:
+            activity_count += 1
+            print(f"\n=== Processing Activity #{activity_count} ===")
+            
+            print(f"Getting activity date from Garmin...")
+            date = garmin_client.get_date_time_from_activity(driver, wait)
+            date_str = date.strftime("%Y-%m-%dT%H:%M:%S")
+            print(f"Processing activity from {date} ({date_str})")
 
-        correspondingStravaActivityWoDetails = next((activity for activity in all_activities if datetime.strptime(activity['start_date_local'],"%Y-%m-%dT%H:%M:%SZ").replace(second=0).isoformat() == date_str), None)
+            correspondingStravaActivityWoDetails = next((activity for activity in all_activities if datetime.strptime(activity['start_date_local'],"%Y-%m-%dT%H:%M:%SZ").replace(second=0).isoformat() == date_str), None)
+        except Exception as e:
+            print(f"❌ Error processing activity #{activity_count}: {e}")
+            import traceback
+            traceback.print_exc()
+            break
 
         if correspondingStravaActivityWoDetails is None:
             print("No corresponding Strava activity found, stopping.")
