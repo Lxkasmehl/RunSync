@@ -201,7 +201,7 @@ class SheetsClient:
             # Update the overview worksheet with the new worksheet title
             overview_ws = sh.worksheet("Übersicht")
             cell_list_A = overview_ws.col_values(1)
-            cell_list_J = overview_ws.col_values(10)
+            cell_list_K = overview_ws.col_values(11)
 
             # Collect overview updates to do them in batch
             overview_updates = []
@@ -210,20 +210,20 @@ class SheetsClient:
                 next_available_row_A = len(cell_list_A) + 1
                 overview_updates.append((f"A{next_available_row_A}", worksheet_title))
 
-            # Check if hyperlink already exists in column J
+            # Check if hyperlink already exists in column K
             hyperlink_exists = False
-            for i, cell_value in enumerate(cell_list_J):
+            for i, cell_value in enumerate(cell_list_K):
                 if cell_value and ('=HYPERLINK(' in str(cell_value) or 'HYPERLINK(' in str(cell_value)) and worksheet_title in str(cell_value):
                     hyperlink_exists = True
                     break
             
             if not hyperlink_exists:
-                next_available_row_J = len(cell_list_J) + 1
+                next_available_row_K = len(cell_list_K) + 1
                 # Use the new_worksheet object directly instead of looking it up again
                 worksheet_url = f"https://docs.google.com/spreadsheets/d/{sh.id}/edit#gid={new_worksheet.id}"
                 # Use proper HYPERLINK formula syntax with semicolon separator
                 hyperlink_formula = f'=HYPERLINK("{worksheet_url}";"{worksheet_title}")'
-                overview_updates.append((f"J{next_available_row_J}", hyperlink_formula))
+                overview_updates.append((f"K{next_available_row_K}", hyperlink_formula))
 
             # Update regular cells in batch
             if overview_updates:
@@ -233,8 +233,8 @@ class SheetsClient:
             
             # Update hyperlink separately using update_acell to ensure it's treated as a formula
             if not hyperlink_exists:
-                overview_ws.update_acell(f"J{next_available_row_J}", hyperlink_formula)
-                print(f"Updated hyperlink in J{next_available_row_J}")
+                overview_ws.update_acell(f"K{next_available_row_K}", hyperlink_formula)
+                print(f"Updated hyperlink in K{next_available_row_K}")
 
             # Set the header row in the new worksheet with Sunday-Saturday week range
             week_start_sunday = week_start
