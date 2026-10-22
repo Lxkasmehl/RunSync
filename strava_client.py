@@ -111,10 +111,38 @@ class StravaClient:
         print(f"Gespeichert in {self.token_file}")
 
 
+    # Webhook: Strava meldet neue Aktivitaeten an eine Adresse (pro Strava-App nur eine Anmeldung)
+    def subscriptions(self):
+        response = requests.get(f"{API}/push_subscriptions", params={"client_id": self.client_id, "client_secret": self.client_secret}, timeout=30)
+        response.raise_for_status()
+        return response.json()
+
+    def subscribe(self, callback_url, verify_token):
+        response = requests.post(f"{API}/push_subscriptions", data={
+            "client_id": self.client_id, "client_secret": self.client_secret,
+            "callback_url": callback_url, "verify_token": verify_token,
+        }, timeout=30)
+        response.raise_for_status()
+        return response.json()
+
+    def unsubscribe(self, subscription_id):
+        response = requests.delete(f"{API}/push_subscriptions/{subscription_id}",
+                                   params={"client_id": self.client_id, "client_secret": self.client_secret}, timeout=30)
+        response.raise_for_status()
+
+
 if __name__ == "__main__":
     import sys
 
-    if sys.argv[1:] == ["auth"]:
-        StravaClient().authenticate()
+    args = sys.argv[1:]
+    client = StravaClient()
+    if args == ["auth"]:
+        client.authenticate()
+    elif args == ["subscriptions"]:
+        print(client.subscriptions())
+    elif len(args) == 3 and args[0] == "subscribe":
+        print(client.subscribe(args[1], args[2]))
+    elif len(args) == 2 and args[0] == "unsubscribe":
+        client.unsubscribe(args[1])
     else:
-        print("Aufruf: python strava_client.py auth")
+        print("Aufruf: python strava_client.py auth | subscriptions | subscribe <callback_url> <verify_token> | unsubscribe <id>")
