@@ -42,6 +42,9 @@ class GarminClient:
     def get_shoes(self):
         return self.request("GET", "/gear")["shoes"]
 
+    def create_shoe(self, brand, model, name):
+        return self.request("POST", "/gear", json={"brand": brand, "model": model, "name": name})
+
     def update_activity(self, start_local, name=None, description=None, gear_uuid=None):
         """Findet die Aktivitaet ueber die Startzeit (Ortszeit, wie bei Strava) und setzt die angegebenen Felder."""
         body = {"start_local": start_local, "name": name, "description": description, "gear_uuid": gear_uuid}

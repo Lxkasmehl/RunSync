@@ -2,6 +2,7 @@
 
 GET  /ping                      lebt der Dienst
 GET  /shoes                     Schuhliste (shoes.json)
+POST /shoes/add     {"name": "Nike Pegasus 41 Black"}  Schuh aufnehmen bzw. auf Garmin/Strava ergaenzen
 POST /activity/new  {"id": 123} neue Strava-Aktivitaet: Zahl ins Sheet, Infos zurueck (is_run, start_local, distance_km)
 POST /run/log       {"date": "2026-10-20", "daytime": "morning", "strava_ids": [...], "what": ..., "shoe": ..., "thoughts": ...}
 POST /runs/undocumented {"days": 14}   Laeufe, bei denen im Sheet Hauptzelle oder Notiz fehlt
@@ -52,6 +53,7 @@ def run_log(body):
 ROUTES = {
     ("GET", "/ping"): lambda body: {},
     ("GET", "/shoes"): lambda body: {"shoes": [s["name"] for s in shoes.load_shoes()]},
+    ("POST", "/shoes/add"): lambda body: main_app.add_shoe(strava, garmin, str(body.get("name") or "")),
     ("POST", "/activity/new"): lambda body: main_app.new_activity(sheets(), strava, body["id"]),
     ("POST", "/run/log"): run_log,
     ("POST", "/runs/undocumented"): lambda body: main_app.undocumented_runs(sheets(), strava, days=int(body.get("days") or 14)),

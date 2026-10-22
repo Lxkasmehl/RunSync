@@ -55,6 +55,11 @@ class Shoes(unittest.TestCase):
         self.check("Invincible 3, in dem blauen", ["Nike Invincible 3 Blue (DE)", "Nike Invincible 3 Blue (US)"])
         self.check("Structures", ["Nike Structure 25 Bowerman", "Nike Structure 25 White Blue"])
 
+    def test_unknown(self):
+        # Modellnummer muss passen: nicht stillschweigend den Pegasus 40 Black nehmen
+        self.assertEqual(shoes.resolve("Pegasus 41 schwarz"), (None, []))
+        self.assertEqual(shoes.resolve("Brooks Ghost"), (None, []))
+
     def test_ids_unique(self):
         all_shoes = shoes.load_shoes()
         for side in ("garmin", "strava"):
@@ -120,6 +125,60 @@ class RunTexts(unittest.TestCase):
         sheets = FakeSheets({})
         sheets._read = lambda worksheet, cells: self.fail("read with no cells") if not cells else {}
         self.assertEqual(sheets.set_run_texts("2026-10-22T06:16:55", None, None)["cells"], [])
+
+
+class FakeGarmin:
+    def __init__(self, shoes_list):
+        self.list, self.created = shoes_list, []
+
+    def get_shoes(self):
+        return self.list
+
+    def create_shoe(self, brand, model, name):
+        self.created.append((brand, model, name))
+        return {"uuid": "new-garmin-uuid", "name": name}
+
+
+class FakeStrava:
+    def __init__(self, shoes_list):
+        self.list = shoes_list
+
+    def get_shoes(self):
+        return self.list
+
+
+class AddShoe(unittest.TestCase):
+    def setUp(self):
+        import main_app
+        self.main_app = main_app
+        self.tmp = tempfile.TemporaryDirectory()
+        self.old_file = shoes.DATA_FILE
+        shoes.DATA_FILE = os.path.join(self.tmp.name, "shoes.json")
+        shoes.save_shoes([{"name": "Nike Zoom Fly 6", "garmin": "zf6", "strava": None},
+                          {"name": "Nike Pegasus 40 Black", "garmin": "p40", "strava": "g1"}])
+
+    def tearDown(self):
+        shoes.DATA_FILE = self.old_file
+        self.tmp.cleanup()
+
+    def test_new_shoe_created_on_garmin_strava_missing(self):
+        garmin = FakeGarmin([{"uuid": "p40", "name": "Pegasus 40 Black"}])
+        result = self.main_app.add_shoe(FakeStrava([{"id": "g1", "name": "Nike Pegasus 40 black"}]), garmin, "Nike Pegasus 41 Black")
+        self.assertEqual((result["garmin"], result["strava"]), ("created", "missing"))
+        self.assertEqual(garmin.created, [("Nike", "Pegasus 41 Black", "Nike Pegasus 41 Black")])
+        self.assertEqual(shoes.resolve("Pegasus 41")[0]["garmin"], "new-garmin-uuid")
+
+    def test_complete_strava_side_after_creating_in_app(self):
+        strava = FakeStrava([{"id": "g1", "name": "Nike Pegasus 40 black"}, {"id": "g9", "name": "Nike Zoom Fly 6 orange"}])
+        result = self.main_app.add_shoe(strava, FakeGarmin([]), "Nike Zoom Fly 6")
+        self.assertEqual((result["garmin"], result["strava"]), ("already", "linked to 'Nike Zoom Fly 6 orange'"))
+        self.assertEqual(shoes.resolve("Zoom Fly")[0]["strava"], "g9")
+
+    def test_links_existing_garmin_shoe_instead_of_creating(self):
+        garmin = FakeGarmin([{"uuid": "p40", "name": "Pegasus 40 Black"}, {"uuid": "b13", "name": "adidas Adizero Boston 13"}])
+        result = self.main_app.add_shoe(FakeStrava([]), garmin, "Adidas Boston 13")
+        self.assertEqual(result["garmin"], "linked to 'adidas Adizero Boston 13'")
+        self.assertEqual(garmin.created, [])
 
 
 if __name__ == "__main__":

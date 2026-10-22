@@ -203,8 +203,10 @@ def log_run(sheets_client, strava_client, garmin_client, date=None, daytime=None
     shoe_entry = None
     if shoe:
         shoe_entry, options = shoes.resolve(shoe)
-        if not shoe_entry:
+        if options:
             raise RunSyncError("ambiguous_shoe", f"Schuh '{shoe}' ist nicht eindeutig", options=options)
+        if not shoe_entry:
+            raise RunSyncError("unknown_shoe", f"Schuh '{shoe}' ist unbekannt, mit add_shoe anlegen")
     runs = find_runs(strava_client, date, daytime, strava_ids)
     infos = [run_info(a) for a in runs]
     garmin_gear = shoe_entry["garmin"] if shoe_entry else None
@@ -235,10 +237,56 @@ def log_run(sheets_client, strava_client, garmin_client, date=None, daytime=None
                 result["strava"].append({"strava_id": info["strava_id"], "ok": False, "error": f"{type(e).__name__}: {e}"[:300]})
 
     if shoe_entry and not garmin_gear:
-        result["notes"].append(f"{shoe_entry['name']} gibt es auf Garmin nicht, dort wurde kein Schuh gesetzt.")
+        result["notes"].append(f"{shoe_entry['name']} gibt es auf Garmin nicht, dort wurde kein Schuh gesetzt. add_shoe kann ihn ergaenzen.")
     if shoe_entry and not strava_gear:
-        result["notes"].append(f"{shoe_entry['name']} gibt es auf Strava nicht, dort wurde kein Schuh gesetzt.")
+        result["notes"].append(f"{shoe_entry['name']} gibt es auf Strava nicht, dort wurde kein Schuh gesetzt. add_shoe kann ihn ergaenzen.")
     result["ok"] = result["sheet"]["ok"] and all(r["ok"] for r in result["garmin"] + result["strava"])
+    return result
+
+
+def add_shoe(strava_client, garmin_client, name):
+    """Neuen Schuh aufnehmen oder einen bekannten auf der fehlenden Seite ergaenzen.
+
+    Garmin: passenden, noch nicht zugeordneten Schuh verknuepfen, sonst neu anlegen.
+    Strava: passenden, noch nicht zugeordneten Schuh verknuepfen. Anlegen geht ueber die Strava-API nicht,
+    dann muss Lukas ihn in der Strava-App anlegen und add_shoe erneut aufrufen.
+    """
+    name = " ".join(name.split())
+    if len(shoes.words(name)) < 2:
+        raise RunSyncError("bad_request", "Bitte Marke und Modell nennen, z.B. 'Nike Pegasus 41 Black'")
+    all_shoes = shoes.load_shoes()
+    entry = next((s for s in all_shoes if s["name"].lower() == name.lower()), None)
+    if entry is None:
+        entry = {"name": name, "garmin": None, "strava": None}
+        all_shoes.append(entry)
+    result = {"name": entry["name"]}
+
+    if entry["garmin"]:
+        result["garmin"] = "already"
+    else:
+        taken = {s["garmin"] for s in all_shoes if s["garmin"]}
+        free = {g["name"]: g["uuid"] for g in garmin_client.get_shoes() if g["uuid"] not in taken and g["name"]}
+        match, _ = shoes.best(entry["name"], list(free), minimum=2)
+        if match:
+            entry["garmin"], result["garmin"] = free[match], f"linked to '{match}'"
+        else:
+            brand, model = entry["name"].split(" ", 1)
+            entry["garmin"], result["garmin"] = garmin_client.create_shoe(brand, model, entry["name"])["uuid"], "created"
+
+    if entry["strava"]:
+        result["strava"] = "already"
+    else:
+        taken = {s["strava"] for s in all_shoes if s["strava"]}
+        free = {s["name"]: s["id"] for s in strava_client.get_shoes() if s["id"] not in taken and not s.get("retired")}
+        match, _ = shoes.best(entry["name"], list(free), minimum=2)
+        if match:
+            entry["strava"], result["strava"] = free[match], f"linked to '{match}'"
+        else:
+            result["strava"] = "missing"
+            result["note"] = ("Strava erlaubt Apps nicht, Schuhe anzulegen. Lukas muss ihn in der Strava-App anlegen "
+                              "(Profil > Ausruestung), danach add_shoe erneut aufrufen, um ihn zu verknuepfen.")
+
+    shoes.save_shoes(all_shoes)
     return result
 
 

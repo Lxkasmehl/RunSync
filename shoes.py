@@ -1,9 +1,15 @@
-"""Schuhe: Zuordnung Garmin <-> Strava (shoes.json) und Suche nach freier Beschreibung ("der blaue Invincible 3")."""
+"""Schuhe: Zuordnung Garmin <-> Strava und Suche nach freier Beschreibung ("der blaue Invincible 3").
+
+Die Liste liegt auf dem Server in DATA_DIR/shoes.json, damit neu angelegte Schuhe erhalten bleiben. Beim ersten Start
+wird sie aus der shoes.json im Repo uebernommen (die Repo-Datei ist nur der Startstand).
+"""
 import json
 import os
 import re
+import shutil
 
-SHOES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "shoes.json")
+REPO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "shoes.json")
+DATA_FILE = os.path.join(os.environ["DATA_DIR"], "shoes.json") if os.getenv("DATA_DIR") else REPO_FILE
 
 # Deutsche Farben (auch gebeugt: "blauen", "weisse") auf die englischen Namen abbilden
 COLORS = {"blau": "blue", "weiss": "white", "weiß": "white", "rot": "red", "grau": "grey", "gray": "grey",
@@ -13,8 +19,17 @@ FILLER = {"der", "die", "das", "den", "dem", "in", "im", "mit", "meinen", "meine
 
 
 def load_shoes():
-    with open(SHOES_FILE, encoding="utf-8") as f:
+    if not os.path.exists(DATA_FILE):
+        shutil.copy(REPO_FILE, DATA_FILE)
+    with open(DATA_FILE, encoding="utf-8") as f:
         return json.load(f)
+
+
+def save_shoes(shoes):
+    tmp = DATA_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write("[\n" + ",\n".join("  " + json.dumps(s, ensure_ascii=False) for s in sorted(shoes, key=lambda s: s["name"])) + "\n]\n")
+    os.replace(tmp, DATA_FILE)
 
 
 def words(text):
@@ -38,23 +53,35 @@ def tokens(text):
     return set(found) | joined
 
 
+def score(query, name):
+    """Gemeinsame Woerter. Modellnummern muessen passen: "Pegasus 41" ist nicht der Pegasus 40."""
+    wanted, have = tokens(query), tokens(name)
+    numbers = {w for w in words(query) if any(ch.isdigit() for ch in w)}
+    if not numbers <= have:
+        return 0
+    return len(wanted & have)
+
+
+def best(query, names, minimum=1):
+    """Eindeutig bester Name (oder None) und alle gleich guten Kandidaten."""
+    scored = [(score(query, n), n) for n in names]
+    top = max((s for s, _ in scored), default=0)
+    if top < minimum:
+        return None, []
+    candidates = [n for s, n in scored if s == top]
+    return (candidates[0] if len(candidates) == 1 else None), candidates
+
+
 def resolve(text):
-    """Gibt (schuh, None) zurueck, oder (None, [Kandidaten]) wenn unklar oder nichts passt."""
+    """(schuh, None) wenn eindeutig, (None, [Kandidaten]) wenn mehrdeutig, (None, []) wenn unbekannt."""
     shoes = load_shoes()
     exact = [s for s in shoes if s["name"].lower() == text.strip().lower()]
     if exact:
         return exact[0], None
-    wanted = tokens(text)
-    if not wanted:
-        return None, [s["name"] for s in shoes]
-    scored = [(len(wanted & tokens(s["name"])), s) for s in shoes]
-    best = max(score for score, _ in scored)
-    if best == 0:
-        return None, [s["name"] for s in shoes]
-    candidates = [s for score, s in scored if score == best]
-    if len(candidates) == 1:
-        return candidates[0], None
-    return None, [s["name"] for s in candidates]
+    name, candidates = best(text, [s["name"] for s in shoes])
+    if name:
+        return next(s for s in shoes if s["name"] == name), None
+    return None, candidates
 
 
 def by_strava_id(gear_id):
