@@ -17,20 +17,25 @@ def load_shoes():
         return json.load(f)
 
 
-def tokens(text):
-    words = re.sub(r"[()/%,.\-]", " ", text.lower()).split()
-    result = set()
-    for word in words:
+def words(text):
+    result = []
+    for word in re.sub(r"[()/%,.\-]", " ", text.lower()).split():
         for german, english in COLORS.items():
             if word.startswith(german):
                 word = english
                 break
         if word in FILLER:
             continue
-        for part in word.split():
-            # Mehrzahl ignorieren: "structures" findet "structure"
-            result.add(part[:-1] if len(part) > 4 and part.endswith("s") else part)
+        # Mehrzahl ignorieren: "structures" findet "structure"
+        result.extend(part[:-1] if len(part) > 4 and part.endswith("s") else part for part in word.split())
     return result
+
+
+def tokens(text):
+    found = words(text)
+    # Getrennt gesprochene Namen zusammensetzen: "Cloud Surfer" findet "Cloudsurfer"
+    joined = {a + b for a, b in zip(found, found[1:])}
+    return set(found) | joined
 
 
 def resolve(text):

@@ -46,6 +46,10 @@ class Shoes(unittest.TestCase):
         self.check("die blauen Invincible DE", "Nike Invincible 3 Blue (DE)")
         self.check("meine Structures Bowerman", "Nike Structure 25 Bowerman")
         self.check("Nike Pegasus 39 Grey", "Nike Pegasus 39 Grey")
+        # So kam es aus der Sprachnachricht
+        self.check("On Cloud Surfer", "On Cloudsurfer")
+        self.check("On-Cloud-Surfer", "On Cloudsurfer")
+        self.check("Cloud Boom", "On Cloudboom Echo 3")
 
     def test_ambiguous(self):
         self.check("Invincible 3, in dem blauen", ["Nike Invincible 3 Blue (DE)", "Nike Invincible 3 Blue (US)"])
