@@ -158,6 +158,9 @@ def undocumented_runs(sheets_client, strava_client, days=14):
     result = []
     for (date, daytime), runs in blocks.items():
         cells = sheets_client.read_run_cells(runs[0]["start_local"])
+        # Ohne Kilometer in diesem Block steht der Lauf woanders (von Hand verschoben), dann nicht melden
+        if not str(cells["run_value"] or "").strip():
+            continue
         missing = [name for name, key in (("what", "run_text"), ("thoughts", "notes")) if not (cells[key] or "").strip()]
         if missing:
             result.append({"date": date, "daytime": daytime, "distance_km": round(sum(r["distance_km"] for r in runs), 2),

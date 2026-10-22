@@ -218,11 +218,12 @@ class SheetsClient:
         return True
 
     def read_run_cells(self, start_local):
-        """Aktuelle Hauptzelle und Notiz des Lauf-Blocks."""
+        """Aktuelle Hauptzelle, Kilometer und Notiz des Lauf-Blocks."""
         date = datetime.fromisoformat(start_local)
         cells = slot_cells(date)
-        values = self._read(self.week_worksheet(date), [cells["run_text"], cells["notes"]])
-        return {"run_text": values[cells["run_text"]], "notes": values[cells["notes"]]}
+        keys = ("run_text", "run_value", "notes")
+        values = self._read(self.week_worksheet(date), [cells[k] for k in keys])
+        return {k: values[cells[k]] for k in keys}
 
     def set_run_texts(self, start_local, main_text=None, notes=None):
         """Hauptzelle und Notiz des Lauf-Blocks setzen (Vormittag oder Nachmittag des Tages).
@@ -234,6 +235,8 @@ class SheetsClient:
         cells = slot_cells(date)
         wanted = {cells["run_text"]: main_text, cells["notes"]: notes}
         wanted = {cell: text.strip() for cell, text in wanted.items() if text and text.strip()}
+        if not wanted:
+            return {"sheet": worksheet.title, "cells": []}
         current = self._read(worksheet, list(wanted))
 
         with ledger_lock:

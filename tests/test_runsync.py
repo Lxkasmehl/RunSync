@@ -115,6 +115,12 @@ class RunTexts(unittest.TestCase):
         sheets.set_run_texts("2026-10-22T06:16:55", None, "  ")
         self.assertEqual(sheets.ws.cells, {"J4": "70min easy", "J5": "Notiz"})
 
+    def test_no_texts_reads_nothing(self):
+        # Nur Schuh geaendert: Google darf nicht mit einer leeren Zellenliste gefragt werden
+        sheets = FakeSheets({})
+        sheets._read = lambda worksheet, cells: self.fail("read with no cells") if not cells else {}
+        self.assertEqual(sheets.set_run_texts("2026-10-22T06:16:55", None, None)["cells"], [])
+
 
 if __name__ == "__main__":
     unittest.main()
