@@ -50,6 +50,8 @@ class Shoes(unittest.TestCase):
         self.check("On Cloud Surfer", "On Cloudsurfer")
         self.check("On-Cloud-Surfer", "On Cloudsurfer")
         self.check("Cloud Boom", "On Cloudboom Echo 3")
+        self.check("blauen Invincible 3, die ich in den USA habe", "Nike Invincible 3 Blue (US)")
+        self.check("die deutschen blauen Invincible", "Nike Invincible 3 Blue (DE)")
 
     def test_ambiguous(self):
         self.check("Invincible 3, in dem blauen", ["Nike Invincible 3 Blue (DE)", "Nike Invincible 3 Blue (US)"])

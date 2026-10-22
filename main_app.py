@@ -268,7 +268,11 @@ def log_run(sheets_client, strava_client, garmin_client, date=None, daytime=None
         result["notes"].append(f"{shoe_entry['name']} does not exist on Garmin, no shoe was set there. add_shoe can add it.")
     if shoe_entry and not strava_gear:
         result["notes"].append(f"{shoe_entry['name']} does not exist on Strava, no shoe was set there. add_shoe can add it.")
-    result["ok"] = result["sheet"]["ok"] and all(r["ok"] for r in result["garmin"] + result["strava"])
+    result["ok"] = result["sheet"]["ok"] and all(r["ok"] for r in result["garmin"] + result["strava"]) and "shoe_problem" not in result
+    if "shoe_problem" in result:
+        result["action_needed"] = ("Everything except the shoe was saved. Ask the user which shoe it was"
+                                   + (f" ({' or '.join(result['shoe_problem']['options'])})" if result["shoe_problem"].get("options") else "")
+                                   + ", then call log_run for the same run with only the shoe.")
     return result
 
 
