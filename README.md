@@ -48,15 +48,20 @@ nichts doppelt, und eine Korrektur ersetzt den alten Text statt ihn anzuhängen.
 
 ## Schuhe
 
-`shoes.json` ordnet jedem Schuh die Garmin-uuid und die Strava-gear-id zu (`null`, wenn es ihn dort nicht gibt).
-Neuer Schuh: auf Garmin und Strava anlegen, Eintrag ergänzen, committen, `sh deploy.sh`. Die IDs liefern
-`GET http://garmin:8000/gear` (im Docker-Netz) und `StravaClient().get_shoes()`.
-Ist eine Beschreibung nicht eindeutig (z.B. zwei blaue Invincible), fragt der Bot nach.
+Die Schuhliste ordnet jedem Schuh die Garmin-uuid und die Strava-gear-id zu (`null`, wenn es ihn dort nicht gibt).
+Sie liegt auf dem Server in `/data/shoes.json`; `shoes.json` im Repo ist nur der Startstand.
+
+- Ist eine Beschreibung nicht eindeutig (z.B. zwei blaue Invincible), fragt der Bot nach.
+- Modellnummern müssen passen: "Pegasus 41" landet nie beim Pegasus 40.
+- Unbekannter Schuh: Der Bot fragt nach dem Namen ("Nike Pegasus 41 Black") und ruft `add_shoe` auf. Auf Garmin
+  wird ein passender, noch nicht zugeordneter Schuh verknüpft oder ein neuer angelegt. Auf Strava kann eine App keine
+  Schuhe anlegen: Den Schuh in der Strava-App anlegen, dem Bot Bescheid sagen, dann verknüpft er ihn.
+- Genauso für Schuhe, die es nur auf einer Seite gibt.
 
 ## Betrieb
 
 - Ausrollen: committen, dann `sh deploy.sh` (kopiert HEAD nach `/opt/n8n/runsync` und baut den Container neu)
-- Daten im Volume `runsync_data` (`/data`): `strava_tokens.json`, `service-account.json`, `ledger.json`
+- Daten im Volume `runsync_data` (`/data`): `strava_tokens.json`, `service-account.json`, `ledger.json`, `shoes.json`
 - Zugangsdaten in `/opt/n8n/.env`: `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, `SHEET_DOCUMENT_NAME`
 - Strava neu freigeben (z.B. bei abgelaufenem Token): lokal `python strava_client.py auth`, dann die neue
   `strava_tokens.json` in den Container kopieren:
