@@ -193,25 +193,53 @@ def find_runs(strava_client, date=None, daytime=None, strava_ids=None):
     return runs
 
 
+def remove_passages(message, passages):
+    """The message without the given passages (case-insensitive, whitespace-tolerant), plus passages not found.
+
+    Used for the thoughts: a language model only names the short passages to drop (day, training, shoes) instead of
+    copying a long voice message, so nothing else can get lost. A passage that isn't found simply stays in.
+    """
+    text = " ".join(message.split())
+    missing = []
+    for passage in passages:
+        passage = " ".join(passage.split())
+        if not passage:
+            continue
+        i = text.lower().find(passage.lower())
+        if i < 0:
+            missing.append(passage)
+            continue
+        text = text[:i] + " " + text[i + len(passage):]
+    text = re.sub(r"\s+([.,;:!?])", r"\1", text)          # no space before punctuation
+    text = re.sub(r"([.,;:!?])(?:\s*[.,;:])+", r"\1", text)  # leftover punctuation pairs like ". ,"
+    text = re.sub(r"^[\s.,;:!?]+", "", re.sub(r"\s{2,}", " ", text)).strip()
+    return text, missing
+
+
 def log_run(sheets_client, strava_client, garmin_client, date=None, daytime=None, strava_ids=None,
-            what=None, shoe=None, thoughts=None):
+            what=None, shoe=None, thoughts=None, message=None, remove=None, thoughts_from_message=False):
     """Write the details of the runs of one half day (morning or afternoon) everywhere.
 
+    thoughts_from_message: the thoughts are the whole message minus the passages in remove.
     Empty fields stay unchanged. Each target is tried on its own; the result says what worked.
+    If the shoe is unknown or ambiguous, everything else is still saved and shoe_problem says why.
     """
+    result = {"garmin": [], "strava": [], "notes": []}
+    if thoughts_from_message and (message or "").strip():
+        thoughts, result["not_removed"] = remove_passages(message, remove or [])
     what, thoughts = (what or "").strip() or None, (thoughts or "").strip() or None
     shoe_entry = None
     if shoe:
         shoe_entry, options = shoes.resolve(shoe)
         if options:
-            raise RunSyncError("ambiguous_shoe", f"Shoe '{shoe}' is ambiguous", options=options)
-        if not shoe_entry:
-            raise RunSyncError("unknown_shoe", f"Shoe '{shoe}' is unknown, add it with add_shoe")
+            result["shoe_problem"] = {"error_type": "ambiguous_shoe", "message": f"Shoe '{shoe}' is ambiguous", "options": options}
+        elif not shoe_entry:
+            result["shoe_problem"] = {"error_type": "unknown_shoe", "message": f"Shoe '{shoe}' is unknown, add it with add_shoe"}
     runs = find_runs(strava_client, date, daytime, strava_ids)
     infos = [run_info(a) for a in runs]
     garmin_gear = shoe_entry["garmin"] if shoe_entry else None
     strava_gear = shoe_entry["strava"] if shoe_entry else None
-    result = {"runs": infos, "shoe": shoe_entry["name"] if shoe_entry else None, "garmin": [], "strava": [], "notes": []}
+    result |= {"runs": infos, "shoe": shoe_entry["name"] if shoe_entry else None, "thoughts_saved": thoughts}
 
     try:
         for activity in runs:

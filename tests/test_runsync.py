@@ -127,6 +127,30 @@ class RunTexts(unittest.TestCase):
         self.assertEqual(sheets.set_run_texts("2026-10-22T06:16:55", None, None)["cells"], [])
 
 
+class RemovePassages(unittest.TestCase):
+    def setUp(self):
+        import main_app
+        self.remove = main_app.remove_passages
+
+    def test_real_transcripts(self):
+        text, missing = self.remove(
+            "Ja, es waren 70 Minuten easy. Ich hatte meine On-Cloud-Surfer an und es lief gut. Ich war zu zweit mit Leo unterwegs.",
+            ["es waren 70 Minuten easy.", "Ich hatte meine On-Cloud-Surfer an und"])
+        self.assertEqual((text, missing), ("Ja, es lief gut. Ich war zu zweit mit Leo unterwegs.", []))
+        text, _ = self.remove(
+            "Montagnachmittag war 40 Minuten easy und Speed Development in meinem hellgrünen Pegasus 39. Und ja, es war "
+            "alles ein bisschen doof, weil ich um 14 Uhr ein Meeting hatte. 30 Meter austrudeln in Spikes. War gut.",
+            ["Montagnachmittag war 40 Minuten easy und Speed Development in meinem hellgrünen Pegasus 39."])
+        self.assertEqual(text, "Und ja, es war alles ein bisschen doof, weil ich um 14 Uhr ein Meeting hatte. "
+                               "30 Meter austrudeln in Spikes. War gut.")
+
+    def test_tolerant_and_safe(self):
+        # Case and line breaks don't matter; a passage that isn't found stays in and is reported
+        text, missing = self.remove("Okay, das geht um\nSamstag morgen. Beine schwer.", ["okay, das geht um samstag morgen.", "gar nicht da"])
+        self.assertEqual((text, missing), ("Beine schwer.", ["gar nicht da"]))
+        self.assertEqual(self.remove("Alles gut.", []), ("Alles gut.", []))
+
+
 class FakeGarmin:
     def __init__(self, shoes_list):
         self.list, self.created = shoes_list, []

@@ -5,14 +5,15 @@ GET  /shoes                     shoe list
 POST /shoes/add     {"name": "Nike Pegasus 41 Black"}  add a shoe, or complete it on Garmin/Strava
 POST /activity/new  {"id": 123} new Strava activity: number into the sheet, returns is_run, start_local, distance_km
 POST /run/log       {"date": "2026-10-20", "daytime": "morning", "strava_ids": [...], "what": ..., "shoe": ..., "thoughts": ...}
+                    or instead of thoughts: {"thoughts_from_message": true, "message": ..., "remove": ["passage", ...]}
 POST /runs/undocumented {"days": 14}   runs whose main cell or notes are still empty in the sheet
 POST /classic/sheets            Strava -> sheet, starting at the first empty day
 POST /classic/garmin {"days": 14, "stop_at_transferred": true}   Strava -> Garmin
 POST /classic/p4p7              yoga/workout counts of finished weeks
 
 Errors: {"ok": false, "error_type": ..., "message": ..., ...}
-  ambiguous_shoe (options), unknown_shoe, run_not_found / ambiguous_run (runs_that_day), bad_request,
-  garmin_*, strava_error, unexpected
+  run_not_found / ambiguous_run (runs_that_day), bad_request, garmin_*, strava_error, unexpected
+/run/log saves everything else when the shoe is unknown or ambiguous and reports it in shoe_problem.
 """
 import json
 import logging
@@ -48,7 +49,8 @@ def sheets():
 def run_log(body):
     return main_app.log_run(sheets(), strava, garmin, date=body.get("date") or None, daytime=body.get("daytime") or None,
                             strava_ids=body.get("strava_ids") or None, what=body.get("what"), shoe=body.get("shoe"),
-                            thoughts=body.get("thoughts"))
+                            thoughts=body.get("thoughts"), message=body.get("message"), remove=body.get("remove"),
+                            thoughts_from_message=body.get("thoughts_from_message") in (True, "true"))
 
 
 ROUTES = {
