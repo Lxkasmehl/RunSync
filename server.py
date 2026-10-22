@@ -1,17 +1,18 @@
-"""RunSync als Dienst fuer n8n (nur im Docker-Netz erreichbar: http://runsync:8001).
+"""RunSync as a service for n8n (only reachable inside the Docker network: http://runsync:8001).
 
-GET  /ping                      lebt der Dienst
-GET  /shoes                     Schuhliste (shoes.json)
-POST /shoes/add     {"name": "Nike Pegasus 41 Black"}  Schuh aufnehmen bzw. auf Garmin/Strava ergaenzen
-POST /activity/new  {"id": 123} neue Strava-Aktivitaet: Zahl ins Sheet, Infos zurueck (is_run, start_local, distance_km)
+GET  /ping                      health check
+GET  /shoes                     shoe list
+POST /shoes/add     {"name": "Nike Pegasus 41 Black"}  add a shoe, or complete it on Garmin/Strava
+POST /activity/new  {"id": 123} new Strava activity: number into the sheet, returns is_run, start_local, distance_km
 POST /run/log       {"date": "2026-10-20", "daytime": "morning", "strava_ids": [...], "what": ..., "shoe": ..., "thoughts": ...}
-POST /runs/undocumented {"days": 14}   Laeufe, bei denen im Sheet Hauptzelle oder Notiz fehlt
-POST /classic/sheets            Strava -> Sheet ab dem ersten leeren Tag
+POST /runs/undocumented {"days": 14}   runs whose main cell or notes are still empty in the sheet
+POST /classic/sheets            Strava -> sheet, starting at the first empty day
 POST /classic/garmin {"days": 14, "stop_at_transferred": true}   Strava -> Garmin
-POST /classic/p4p7              Yoga/Workout-Anzahl der abgeschlossenen Wochen
+POST /classic/p4p7              yoga/workout counts of finished weeks
 
-Fehler: {"ok": false, "error_type": ..., "message": ..., ...}
-  ambiguous_shoe (options), run_not_found / ambiguous_run (runs_that_day), bad_request, strava_error, unexpected
+Errors: {"ok": false, "error_type": ..., "message": ..., ...}
+  ambiguous_shoe (options), unknown_shoe, run_not_found / ambiguous_run (runs_that_day), bad_request,
+  garmin_*, strava_error, unexpected
 """
 import json
 import logging
@@ -30,7 +31,7 @@ from strava_client import StravaClient
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("runsync")
 
-# Ein Auftrag nach dem anderen: Sheet-Zellen werden gelesen und dann geschrieben
+# One request at a time: sheet cells are read and then written
 lock = threading.Lock()
 strava = StravaClient()
 garmin = GarminClient()
@@ -76,11 +77,11 @@ class Handler(BaseHTTPRequestHandler):
     def handle_route(self, method):
         route = ROUTES.get((method, self.path))
         if route is None:
-            return self.send(404, {"ok": False, "error_type": "bad_request", "message": "unbekannter Pfad"})
+            return self.send(404, {"ok": False, "error_type": "bad_request", "message": "unknown path"})
         try:
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or "{}")
         except ValueError:
-            return self.send(400, {"ok": False, "error_type": "bad_request", "message": "kein gueltiges JSON"})
+            return self.send(400, {"ok": False, "error_type": "bad_request", "message": "invalid JSON"})
         global _sheets
         try:
             with lock:
@@ -93,8 +94,8 @@ class Handler(BaseHTTPRequestHandler):
         except requests.HTTPError as e:
             self.send(502, {"ok": False, "error_type": "strava_error", "message": f"{e} {e.response.text[:200]}"})
         except Exception as e:
-            log.exception("Unerwarteter Fehler")
-            _sheets = None  # z.B. abgelaufene Google-Verbindung: beim naechsten Mal neu oeffnen
+            log.exception("Unexpected error")
+            _sheets = None  # e.g. an expired Google connection: reopen next time
             self.send(502, {"ok": False, "error_type": "unexpected", "message": f"{type(e).__name__}: {e}"[:300]})
 
     def do_GET(self):

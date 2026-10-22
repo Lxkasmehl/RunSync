@@ -1,84 +1,87 @@
 # RunSync
 
-Hält mein Trainingstagebuch (Google Sheet), Garmin Connect und Strava in Sync. Läuft als Docker-Dienst auf meinem
-n8n-Server (Repo `Lxkasmehl/n8n-server`) und wird über n8n und meinen Telegram-Bot gesteuert.
+Keeps my training diary (a Google Sheet), Garmin Connect and Strava in sync. Runs as a small Docker service next to
+my self-hosted n8n and is driven by n8n workflows and a Telegram bot.
 
-## Zwei Wege
+## Two workflows
 
-**1. Telegram (aktuell):** Das Training wird im Sheet und auf Garmin dokumentiert.
-- Neue Aktivität auf Strava → Strava-Webhook → Kilometer (bzw. Minuten bei anderen Sportarten) sofort ins Sheet.
-- Bei Läufen fragt der Bot: Was hast du gemacht, welche Schuhe, wie war es?
-- Die Antwort (Text oder Sprachnachricht) landet hier:
-  - **Sheet:** Hauptzelle ("70 Minuten Dauerlauf") und Notiz (Gedanken, wörtlich)
-  - **Garmin:** Beschreibung und Schuhe
-  - **Strava:** Schuhe und private Notiz. Nichts öffentlich Sichtbares (Titel, Beschreibung) wird geändert.
-- Nachträglich geht auch: "Montagmorgen: 70 min locker in den Structures, ..."
-- Antwortest du per Zitat auf die Frage, gehört die Antwort genau zu diesem Lauf. Ohne Zitat fragt der Bot nach,
-  wenn mehrere Läufe offen sind.
-- "Welche Läufe fehlen noch?" listet die Halbtage der letzten 14 Tage, bei denen im Sheet Training oder Gedanken fehlen.
+**1. Telegram (current):** training is documented in the sheet and on Garmin.
+- New activity on Strava → Strava webhook → kilometers (or minutes for other sports) go into the sheet right away.
+- For runs the bot asks: what did you do, which shoes, how did it go?
+- The answer (text or voice message) is written to:
+  - **Sheet:** main cell ("70min easy") and notes (thoughts, word for word)
+  - **Garmin:** description and shoes
+  - **Strava:** shoes and private note only. Nothing publicly visible (title, description) is changed.
+- Works for older runs too: "Monday morning: 70 min easy in the Structures, ..."
+- Replying to the bot's question (Telegram quote) ties the answer to exactly that run. Without a quote the bot asks
+  when several runs are waiting.
+- "Which runs are still missing?" lists the half days of the last 14 days whose description or thoughts are empty
+  in the sheet.
 
-**2. Klassisch:** Alles wird auf Strava gepflegt (Titel, Beschreibung, private Notiz, Schuhe), dann "Sync Strava" an
-den Bot schicken. Strava → Sheet ab dem ersten leeren Tag, Strava → Garmin (Titel, Beschreibung, Schuhe).
-Umschalten: `RUN_MODE` in `build/runs.mjs` im n8n-Server-Repo auf `'strava'` setzen und ausrollen, sonst trägt der
-Webhook neue Aktivitäten ohne Texte ins Sheet ein. Den klassischen Garmin-Sync nicht im Telegram-Modus nutzen, er
-überschreibt die Garmin-Beschreibung mit der von Strava.
+**2. Classic:** everything is maintained on Strava (title, description, private note, shoes), then "Sync Strava" to
+the bot. Strava → sheet from the first empty day, Strava → Garmin (title, description, shoes).
+To switch, set `RUN_MODE` to `'strava'` in the n8n workflow code; otherwise the webhook writes new activities into the
+sheet without texts. Don't use the classic Garmin sync in Telegram mode, it would overwrite the Garmin description
+with the one from Strava.
 
-Wöchentlich (sonntags) trägt n8n die Anzahl Yoga (P7) und Workouts (P4) der abgeschlossenen Wochen ein.
+Every Sunday n8n fills in the number of yoga sessions (P7) and workouts (P4) of finished weeks.
 
 ## Sheet
 
-Wochenblätter `KW{woche}{jahr}` (Sonntag bis Samstag), neue Wochen werden aus der Vorlage `leer` angelegt.
-Je Tag zwei Spalten (Text, Zahl), Sonntag = B/C. Vormittag (Start vor 13 Uhr) Zeilen 3-5, Nachmittag 6-8:
-1. Zeile andere Aktivitäten (Name, Minuten), 2. Zeile Läufe (Hauptzelle, km mit 2 Nachkommastellen), 3. Zeile Notizen.
-Mehrere Läufe im selben Block (Einlaufen, Rennen, Auslaufen) werden addiert und teilen sich Hauptzelle und Notiz.
+Week worksheets `KW{week}{year}` (Sunday to Saturday); new weeks are created from the `leer` template.
+Two columns per day (text, number), Sunday = B/C. Morning (start before 1 pm) rows 3-5, afternoon rows 6-8:
+1st row other activities (name, minutes), 2nd row runs (main cell, km with 2 decimals), 3rd row notes.
+Several runs in the same block (warm-up, race, cool-down) are added up and share main cell and notes.
 
-`ledger.json` merkt sich, welche Aktivitäten schon im Sheet stehen und welche Texte RunSync geschrieben hat. So zählt
-nichts doppelt, und eine Korrektur ersetzt den alten Text statt ihn anzuhängen.
+`ledger.json` records which activities are already in the sheet and which texts RunSync wrote. Nothing is counted
+twice, and a correction replaces the old text instead of appending to it.
 
-## Dateien
+## Files
 
-| Datei | Inhalt |
+| File | Purpose |
 |---|---|
-| `main_app.py` | Ablauf beider Wege, auch lokal per Kommandozeile |
-| `server.py` | HTTP-Dienst für n8n (`http://runsync:8001`, nur im Docker-Netz) |
-| `strava_client.py` | Strava-API, schreibt nur `gear_id` und `private_note` |
-| `garmin_client.py` | Garmin über den Garmin-Dienst des n8n-Servers (`garminconnect`, kein Web-Scraping) |
-| `sheets_client.py` | Google Sheet (gspread, Service-Account) |
-| `shoes.json`, `shoes.py` | Schuh-Zuordnung Garmin ↔ Strava und Suche nach Beschreibung ("Invincible 3 blau") |
+| `main_app.py` | Both workflows, also usable from the command line |
+| `server.py` | HTTP service for n8n (`http://runsync:8001`, Docker network only) |
+| `strava_client.py` | Strava API; only writes `gear_id` and `private_note` |
+| `garmin_client.py` | Garmin via a small Garmin service ([python-garminconnect](https://github.com/cyberjunky/python-garminconnect), no web scraping) |
+| `sheets_client.py` | Google Sheet (gspread, service account) |
+| `shoes.json`, `shoes.py` | Shoe mapping Garmin ↔ Strava and lookup by description ("Invincible 3 blau") |
+| `tests/` | Offline tests |
 
-## Schuhe
+## Shoes
 
-Die Schuhliste ordnet jedem Schuh die Garmin-uuid und die Strava-gear-id zu (`null`, wenn es ihn dort nicht gibt).
-Sie liegt auf dem Server in `/data/shoes.json`; `shoes.json` im Repo ist nur der Startstand.
+The shoe list maps every shoe to its Garmin uuid and Strava gear id (`null` if it doesn't exist there).
+On the server it lives in `/data/shoes.json`; `shoes.json` in the repo is only the initial state.
 
-- Ist eine Beschreibung nicht eindeutig (z.B. zwei blaue Invincible), fragt der Bot nach.
-- Modellnummern müssen passen: "Pegasus 41" landet nie beim Pegasus 40.
-- Unbekannter Schuh: Der Bot fragt nach dem Namen ("Nike Pegasus 41 Black") und ruft `add_shoe` auf. Auf Garmin
-  wird ein passender, noch nicht zugeordneter Schuh verknüpft oder ein neuer angelegt. Auf Strava kann eine App keine
-  Schuhe anlegen: Den Schuh in der Strava-App anlegen, dem Bot Bescheid sagen, dann verknüpft er ihn.
-- Genauso für Schuhe, die es nur auf einer Seite gibt.
+- If a description is ambiguous (e.g. two blue Invincible), the bot asks which one.
+- Model numbers must match: "Pegasus 41" never ends up as the Pegasus 40.
+- Unknown shoe: the bot asks for its name ("Nike Pegasus 41 Black") and calls `add_shoe`. On Garmin it links a
+  matching shoe that isn't mapped yet or creates a new one. Strava doesn't let apps create gear: add the shoe in the
+  Strava app, tell the bot, and it links it.
+- Same for shoes that exist on only one side.
 
-## Betrieb
+## Operations
 
-- Ausrollen: committen, dann `sh deploy.sh` (kopiert HEAD nach `/opt/n8n/runsync` und baut den Container neu)
-- Daten im Volume `runsync_data` (`/data`): `strava_tokens.json`, `service-account.json`, `ledger.json`, `shoes.json`
-- Zugangsdaten in `/opt/n8n/.env`: `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, `SHEET_DOCUMENT_NAME`
-- Strava neu freigeben (z.B. bei abgelaufenem Token): lokal `python strava_client.py auth`, dann die neue
-  `strava_tokens.json` in den Container kopieren:
-  `cat strava_tokens.json | ssh root@2.31.61.2 'cd /opt/n8n && docker compose exec -T runsync sh -c "cat > /data/strava_tokens.json"'`
-- Strava-Webhook: `python strava_client.py subscriptions | subscribe <url> <verify_token> | unsubscribe <id>`
-  (pro Strava-App nur einer; Adresse und Prüfwert stehen in `build/lib.mjs` des n8n-Server-Repos)
+- Deploy: commit, then `sh deploy.sh` (copies HEAD to the server and rebuilds the container; the host is
+  `DEPLOY_HOST` in `.env`)
+- Data in the `runsync_data` volume (`/data`): `strava_tokens.json`, `service-account.json`, `ledger.json`, `shoes.json`
+- Credentials in the server's compose `.env`: `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, `SHEET_DOCUMENT_NAME`
+- Re-authorize Strava (e.g. after a revoked token): run `python strava_client.py auth` locally, then copy the new
+  `strava_tokens.json` into the container:
+  `cat strava_tokens.json | ssh $DEPLOY_HOST 'cd /opt/n8n && docker compose exec -T runsync sh -c "cat > /data/strava_tokens.json"'`
+- Strava webhook: `python strava_client.py subscriptions | subscribe <url> <verify_token> | unsubscribe <id>`
+  (one subscription per Strava app)
 - Logs: `docker compose logs runsync`
 
-## Lokal
+## Local
 
-`.env` mit `FILE_PATH` (Service-Account-JSON), `DOCUMENT_NAME`, `CLIENT_ID`, `CLIENT_SECRET`, dazu
-`strava_tokens.json`. Der Garmin-Dienst ist nur im Docker-Netz erreichbar, Garmin-Aufgaben deshalb auf dem Server:
-`docker compose exec runsync python main_app.py transfer_to_garmin 14`.
-Achtung: Lokal ein anderes `ledger.json` als auf dem Server, also Sheet-Aufgaben besser auch dort ausführen.
+`.env` with `FILE_PATH` (service account JSON), `DOCUMENT_NAME`, `CLIENT_ID`, `CLIENT_SECRET`, `DEPLOY_HOST`, plus
+`strava_tokens.json`. The Garmin service is only reachable inside the Docker network, so run Garmin tasks on the
+server: `docker compose exec runsync python main_app.py transfer_to_garmin 14`.
+Note: a local `ledger.json` is not the server's one, so run sheet tasks on the server as well.
 
 ```
 pip install -r requirements.txt
-python main_app.py update_sheets_data | update_p4_p7 | transfer_to_garmin [tage] | seed_ledger
-python -m unittest discover tests     # Tests ohne Netz (Wochenblatt, Zellen, Schuhsuche, Texte ersetzen)
+python main_app.py update_sheets_data | update_p4_p7 | transfer_to_garmin [days] | seed_ledger
+python -m unittest discover tests     # offline tests (week sheet, cells, shoe lookup, text replacement)
 ```

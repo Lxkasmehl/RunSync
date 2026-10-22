@@ -1,7 +1,8 @@
-"""Schuhe: Zuordnung Garmin <-> Strava und Suche nach freier Beschreibung ("der blaue Invincible 3").
+"""Shoes: mapping Garmin <-> Strava and lookup by a free description ("der blaue Invincible 3").
 
-Die Liste liegt auf dem Server in DATA_DIR/shoes.json, damit neu angelegte Schuhe erhalten bleiben. Beim ersten Start
-wird sie aus der shoes.json im Repo uebernommen (die Repo-Datei ist nur der Startstand).
+On the server the list lives in DATA_DIR/shoes.json so newly added shoes survive deployments. On first start it is
+copied from shoes.json in the repo (the repo file is only the initial state).
+Descriptions are usually German (spoken to a Telegram bot), hence the German color and filler words below.
 """
 import json
 import os
@@ -11,7 +12,7 @@ import shutil
 REPO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "shoes.json")
 DATA_FILE = os.path.join(os.environ["DATA_DIR"], "shoes.json") if os.getenv("DATA_DIR") else REPO_FILE
 
-# Deutsche Farben (auch gebeugt: "blauen", "weisse") auf die englischen Namen abbilden
+# Map German colors (also inflected: "blauen", "weisse") to the English names used in the shoe list
 COLORS = {"blau": "blue", "weiss": "white", "weiß": "white", "rot": "red", "grau": "grey", "gray": "grey",
           "grün": "green", "gruen": "green", "schwarz": "black", "silber": "silver", "hellgrün": "light green"}
 FILLER = {"der", "die", "das", "den", "dem", "in", "im", "mit", "meinen", "meine", "meinem", "mein", "the", "my",
@@ -41,20 +42,20 @@ def words(text):
                 break
         if word in FILLER:
             continue
-        # Mehrzahl ignorieren: "structures" findet "structure"
+        # Ignore plurals: "structures" finds "structure"
         result.extend(part[:-1] if len(part) > 4 and part.endswith("s") else part for part in word.split())
     return result
 
 
 def tokens(text):
     found = words(text)
-    # Getrennt gesprochene Namen zusammensetzen: "Cloud Surfer" findet "Cloudsurfer"
+    # Join names spoken as separate words: "Cloud Surfer" finds "Cloudsurfer"
     joined = {a + b for a, b in zip(found, found[1:])}
     return set(found) | joined
 
 
 def score(query, name):
-    """Gemeinsame Woerter. Modellnummern muessen passen: "Pegasus 41" ist nicht der Pegasus 40."""
+    """Number of shared words. Model numbers must match: "Pegasus 41" is not the Pegasus 40."""
     wanted, have = tokens(query), tokens(name)
     numbers = {w for w in words(query) if any(ch.isdigit() for ch in w)}
     if not numbers <= have:
@@ -63,7 +64,7 @@ def score(query, name):
 
 
 def best(query, names, minimum=1):
-    """Eindeutig bester Name (oder None) und alle gleich guten Kandidaten."""
+    """The unique best name (or None) and all equally good candidates."""
     scored = [(score(query, n), n) for n in names]
     top = max((s for s, _ in scored), default=0)
     if top < minimum:
@@ -73,7 +74,7 @@ def best(query, names, minimum=1):
 
 
 def resolve(text):
-    """(schuh, None) wenn eindeutig, (None, [Kandidaten]) wenn mehrdeutig, (None, []) wenn unbekannt."""
+    """(shoe, None) if unique, (None, [candidates]) if ambiguous, (None, []) if unknown."""
     shoes = load_shoes()
     exact = [s for s in shoes if s["name"].lower() == text.strip().lower()]
     if exact:

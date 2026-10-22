@@ -13,10 +13,10 @@ class GarminError(Exception):
 
 
 class GarminClient:
-    """Garmin Connect ueber den Garmin-Dienst des n8n-Servers (garminconnect, kein Web-Scraping).
+    """Garmin Connect through a small Garmin service (python-garminconnect, no web scraping).
 
-    Der Dienst haelt die einzige Garmin-Anmeldung und schuetzt das Konto vor zu vielen Login-Versuchen.
-    Auf dem Server: http://garmin:8000. Lokal z.B. per SSH-Tunnel und GARMIN_SERVICE_URL=http://localhost:8000.
+    The service holds the only Garmin login and protects the account from too many login attempts.
+    On the server it runs at http://garmin:8000; set GARMIN_SERVICE_URL to use another address.
     """
 
     def __init__(self):
@@ -26,7 +26,7 @@ class GarminClient:
         try:
             response = requests.request(method, f"{self.base_url}{path}", timeout=120, **kwargs)
         except requests.RequestException as e:
-            raise GarminError("unreachable", f"Garmin-Dienst nicht erreichbar: {e}") from e
+            raise GarminError("unreachable", f"Garmin service not reachable: {e}") from e
         try:
             body = response.json()
         except ValueError:
@@ -46,6 +46,6 @@ class GarminClient:
         return self.request("POST", "/gear", json={"brand": brand, "model": model, "name": name})
 
     def update_activity(self, start_local, name=None, description=None, gear_uuid=None):
-        """Findet die Aktivitaet ueber die Startzeit (Ortszeit, wie bei Strava) und setzt die angegebenen Felder."""
+        """Finds the activity by its start time (local time, same as on Strava) and sets the given fields."""
         body = {"start_local": start_local, "name": name, "description": description, "gear_uuid": gear_uuid}
         return self.request("POST", "/activity", json={k: v for k, v in body.items() if v is not None})

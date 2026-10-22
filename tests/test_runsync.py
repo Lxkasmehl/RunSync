@@ -1,4 +1,4 @@
-"""Tests ohne Netz: python -m unittest discover tests"""
+"""Offline tests: python -m unittest discover tests"""
 import os
 import sys
 import tempfile
@@ -13,19 +13,19 @@ import shoes  # noqa: E402
 
 class WeekAndCells(unittest.TestCase):
     def test_week_title(self):
-        # Wochen laufen von Sonntag bis Samstag
+        # Weeks run from Sunday to Saturday
         self.assertEqual(sheets_client.week_title(datetime(2026, 10, 22, 6))[0], "KW4326")
         self.assertEqual(sheets_client.week_title(datetime(2026, 10, 18, 8))[0], "KW4326")
         self.assertEqual(sheets_client.week_title(datetime(2026, 10, 25, 8))[0], "KW4426")
         self.assertEqual(sheets_client.week_title(datetime(2026, 10, 24, 20))[0], "KW4326")
 
     def test_slot_cells(self):
-        # Donnerstag vormittags: Spalten J/K, Zeilen 3-5
+        # Thursday morning: columns J/K, rows 3-5
         self.assertEqual(sheets_client.slot_cells(datetime(2026, 10, 22, 6, 16)),
                          {"other_text": "J3", "other_value": "K3", "run_text": "J4", "run_value": "K4", "notes": "J5"})
-        # Montag 13:00 zaehlt schon zum Nachmittag
+        # Monday 13:00 already counts as afternoon
         self.assertEqual(sheets_client.slot_cells(datetime(2026, 10, 19, 13))["run_value"], "E7")
-        # Sonntag = B/C
+        # Sunday = B/C
         self.assertEqual(sheets_client.slot_cells(datetime(2026, 10, 18, 8))["run_text"], "B4")
 
     def test_parse_number(self):
@@ -46,7 +46,7 @@ class Shoes(unittest.TestCase):
         self.check("die blauen Invincible DE", "Nike Invincible 3 Blue (DE)")
         self.check("meine Structures Bowerman", "Nike Structure 25 Bowerman")
         self.check("Nike Pegasus 39 Grey", "Nike Pegasus 39 Grey")
-        # So kam es aus der Sprachnachricht
+        # As it came out of a voice message transcript
         self.check("On Cloud Surfer", "On Cloudsurfer")
         self.check("On-Cloud-Surfer", "On Cloudsurfer")
         self.check("Cloud Boom", "On Cloudboom Echo 3")
@@ -56,7 +56,7 @@ class Shoes(unittest.TestCase):
         self.check("Structures", ["Nike Structure 25 Bowerman", "Nike Structure 25 White Blue"])
 
     def test_unknown(self):
-        # Modellnummer muss passen: nicht stillschweigend den Pegasus 40 Black nehmen
+        # Model number must match: never silently pick the Pegasus 40 Black
         self.assertEqual(shoes.resolve("Pegasus 41 schwarz"), (None, []))
         self.assertEqual(shoes.resolve("Brooks Ghost"), (None, []))
 
@@ -75,7 +75,7 @@ class FakeWorksheet:
 
 
 class FakeSheets(sheets_client.SheetsClient):
-    """SheetsClient ohne Google: Zellen liegen in einem dict."""
+    """SheetsClient without Google: cells live in a dict."""
 
     def __init__(self, cells):
         self.ws = FakeWorksheet(cells)
@@ -102,13 +102,13 @@ class RunTexts(unittest.TestCase):
 
     def test_replace_own_text_keep_foreign(self):
         sheets = FakeSheets({"J5": "Maurten 320."})
-        sheets.set_run_texts("2026-10-22T06:16:55", "TEST", "erste Version")
+        sheets.set_run_texts("2026-10-22T06:16:55", "TEST", "first version")
         self.assertEqual(sheets.ws.cells["J4"], "TEST")
-        self.assertEqual(sheets.ws.cells["J5"], "Maurten 320.\nerste Version")
-        # Korrektur ersetzt nur den eigenen Text
-        sheets.set_run_texts("2026-10-22T06:16:55", "70min easy", "zweite Version")
+        self.assertEqual(sheets.ws.cells["J5"], "Maurten 320.\nfirst version")
+        # A correction replaces only the text RunSync wrote
+        sheets.set_run_texts("2026-10-22T06:16:55", "70min easy", "second version")
         self.assertEqual(sheets.ws.cells["J4"], "70min easy")
-        self.assertEqual(sheets.ws.cells["J5"], "Maurten 320.\nzweite Version")
+        self.assertEqual(sheets.ws.cells["J5"], "Maurten 320.\nsecond version")
 
     def test_same_text_not_appended_twice(self):
         sheets = FakeSheets({"D4": "70min easy"})
@@ -116,12 +116,12 @@ class RunTexts(unittest.TestCase):
         self.assertEqual(sheets.ws.cells["D4"], "70min easy")
 
     def test_empty_fields_untouched(self):
-        sheets = FakeSheets({"J4": "70min easy", "J5": "Notiz"})
+        sheets = FakeSheets({"J4": "70min easy", "J5": "Note"})
         sheets.set_run_texts("2026-10-22T06:16:55", None, "  ")
-        self.assertEqual(sheets.ws.cells, {"J4": "70min easy", "J5": "Notiz"})
+        self.assertEqual(sheets.ws.cells, {"J4": "70min easy", "J5": "Note"})
 
     def test_no_texts_reads_nothing(self):
-        # Nur Schuh geaendert: Google darf nicht mit einer leeren Zellenliste gefragt werden
+        # Only the shoe changed: Google must not be queried with an empty cell list
         sheets = FakeSheets({})
         sheets._read = lambda worksheet, cells: self.fail("read with no cells") if not cells else {}
         self.assertEqual(sheets.set_run_texts("2026-10-22T06:16:55", None, None)["cells"], [])

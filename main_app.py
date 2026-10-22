@@ -1,19 +1,19 @@
-"""RunSync: Strava, Google Sheets und Garmin Connect abgleichen.
+"""RunSync: keep Strava, Google Sheets and Garmin Connect in sync.
 
-Zwei Wege, je nachdem wo das Training dokumentiert wird:
+Two workflows, depending on where the training is documented:
 
-1. Klassisch, Strava ist die Quelle (Titel, Beschreibung, private Notiz, Schuhe auf Strava):
-   update_sheets_data   Strava -> Sheet, ab dem ersten leeren Tag
-   update_p4_p7         Yoga- und Workout-Anzahl pro Woche in P7/P4
-   transfer_to_garmin   Strava -> Garmin (Titel, Beschreibung, Schuhe)
+1. Classic, Strava is the source (title, description, private note, shoes on Strava):
+   update_sheets_data   Strava -> sheet, starting at the first empty day
+   update_p4_p7         number of yoga and workout sessions per week in P7/P4
+   transfer_to_garmin   Strava -> Garmin (title, description, shoes)
 
-2. Telegram, Lukas schickt die Details an den Bot:
-   new_activity         neue Strava-Aktivitaet: Kilometer bzw. Minuten sofort ins Sheet
-   log_run              "was, welche Schuhe, Gedanken" -> Sheet (Hauptzelle, Notiz), Garmin (Beschreibung, Schuhe),
-                        Strava (Schuhe, private Notiz; nichts Oeffentliches)
-   undocumented_runs    Laeufe der letzten Tage, bei denen im Sheet Hauptzelle oder Notiz fehlt
+2. Telegram, the details are sent to the bot:
+   new_activity         new Strava activity: kilometers or minutes go into the sheet right away
+   log_run              "what, which shoes, thoughts" -> sheet (main cell, notes), Garmin (description, shoes),
+                        Strava (shoes, private note; nothing public)
+   undocumented_runs    recent runs whose main cell or notes are still empty in the sheet
 
-Aufruf lokal: python main_app.py update_sheets_data | update_p4_p7 | transfer_to_garmin [tage] | seed_ledger
+Local usage: python main_app.py update_sheets_data | update_p4_p7 | transfer_to_garmin [days] | seed_ledger
 """
 import re
 import sys
@@ -27,7 +27,7 @@ from sheets_client import SheetsClient, activity_date
 from strava_client import StravaClient
 
 RUN_TYPES = ("Run", "TrailRun", "VirtualRun")
-# Automatische Strava-Namen ("Morning Run") nicht nach Garmin uebertragen
+# Don't copy Strava's automatic names ("Morning Run") to Garmin
 DEFAULT_NAME = re.compile(r"^(Morning|Afternoon|Evening|Lunch|Night) [A-Za-z ]+$")
 
 
@@ -57,10 +57,10 @@ def run_info(activity):
     }
 
 
-# ---------- Klassisch: Strava ist die Quelle ----------
+# ---------- Classic: Strava is the source ----------
 
 def update_sheets_data(sheets_client, strava_client):
-    """Alle Aktivitaeten ab dem ersten noch leeren Tag ins Sheet (ohne Yoga), aelteste zuerst."""
+    """All activities since the first empty day go into the sheet (except yoga), oldest first."""
     start = sheets_client.get_first_not_completed_day()
     activities = strava_client.get_all_activities_in_timeframe(fmt(start), fmt(datetime.now()))
     added = 0
@@ -71,7 +71,7 @@ def update_sheets_data(sheets_client, strava_client):
 
 
 def seed_ledger(sheets_client, strava_client, since="2020-01-01"):
-    """Einmalig beim Umstieg: alles vor dem ersten leeren Tag gilt als schon im Sheet."""
+    """One-off when switching over: everything before the first empty day counts as already in the sheet."""
     until = sheets_client.get_first_not_completed_day()
     activities = strava_client.get_all_activities_in_timeframe(f"{since} 00:00:00", fmt(until))
     with sheets_ledger.ledger_lock:
@@ -83,7 +83,7 @@ def seed_ledger(sheets_client, strava_client, since="2020-01-01"):
 
 
 def update_p4_p7(sheets_client, strava_client):
-    """P7 = Anzahl Yoga, P4 = Anzahl Workouts in abgeschlossenen Wochen ohne Werte."""
+    """P7 = number of yoga sessions, P4 = number of workouts, for finished weeks without values."""
     done = []
     for ws in sheets_client.get_empty_p4_p7_worksheets() or []:
         parts = ws.acell("B1").value.split()
@@ -101,9 +101,9 @@ def update_p4_p7(sheets_client, strava_client):
 
 
 def transfer_to_garmin(strava_client, garmin_client, days=14, stop_at_transferred=True):
-    """Titel, Beschreibung und Schuhe von Strava nach Garmin, neueste zuerst.
+    """Copy title, description and shoes from Strava to Garmin, newest first.
 
-    Mit stop_at_transferred endet der Lauf bei der ersten Aktivitaet, deren Titel auf Garmin schon stimmt.
+    With stop_at_transferred it stops at the first activity whose Garmin title already matches.
     """
     end = datetime.now()
     activities = strava_client.get_all_activities_in_timeframe(fmt(end - timedelta(days=days)), fmt(end))
@@ -122,23 +122,23 @@ def transfer_to_garmin(strava_client, garmin_client, days=14, stop_at_transferre
         garmin = next((g for g in garmin_client.get_activities(start.date().isoformat())
                        if abs((datetime.fromisoformat(g["start_local"]) - start).total_seconds()) <= 60), None)
         if garmin is None:
-            print(f"{start}: keine Garmin-Aktivitaet gefunden")
+            print(f"{start}: no Garmin activity found")
             skipped += 1
             continue
         if stop_at_transferred and name and garmin["name"] == name:
-            print(f"{start}: schon uebertragen ('{name}'), Ende")
+            print(f"{start}: already transferred ('{name}'), stopping")
             break
         result = garmin_client.update_activity(start.isoformat(), name=name, description=description, gear_uuid=gear_uuid)
         transferred.append({"start_local": start.isoformat(), "name": result["name"], "shoe": shoe["name"] if shoe else None})
-        print(f"{start}: '{result['name']}' uebertragen")
+        print(f"{start}: transferred '{result['name']}'")
         time.sleep(1)
     return {"transferred": transferred, "skipped": skipped}
 
 
-# ---------- Telegram: Lukas schickt die Details ----------
+# ---------- Telegram: details come from the bot ----------
 
 def new_activity(sheets_client, strava_client, activity_id):
-    """Neue Strava-Aktivitaet (Webhook): Zahl sofort ins Sheet. Bei Laeufen kommen die Texte spaeter per log_run."""
+    """New Strava activity (webhook): the number goes into the sheet right away. For runs the texts follow via log_run."""
     activity = strava_client.get_activity(activity_id)
     info = run_info(activity) | {"sport_type": activity["sport_type"], "is_run": is_run(activity)}
     if activity["sport_type"] == "Yoga":
@@ -148,7 +148,7 @@ def new_activity(sheets_client, strava_client, activity_id):
 
 
 def undocumented_runs(sheets_client, strava_client, days=14):
-    """Halbtage mit Laeufen der letzten Tage, bei denen im Sheet Hauptzelle oder Notiz leer ist, aelteste zuerst."""
+    """Half days with runs in the last days whose main cell or notes are empty in the sheet, oldest first."""
     end = datetime.now()
     found = strava_client.get_all_activities_in_timeframe(fmt(end - timedelta(days=days)), fmt(end))
     blocks = {}
@@ -158,7 +158,7 @@ def undocumented_runs(sheets_client, strava_client, days=14):
     result = []
     for (date, daytime), runs in blocks.items():
         cells = sheets_client.read_run_cells(runs[0]["start_local"])
-        # Ohne Kilometer in diesem Block steht der Lauf woanders (von Hand verschoben), dann nicht melden
+        # No kilometers in this block means the run was moved elsewhere by hand, so don't report it
         if not str(cells["run_value"] or "").strip():
             continue
         missing = [name for name, key in (("what", "run_text"), ("thoughts", "notes")) if not (cells[key] or "").strip()]
@@ -169,44 +169,44 @@ def undocumented_runs(sheets_client, strava_client, days=14):
 
 
 def find_runs(strava_client, date=None, daytime=None, strava_ids=None):
-    """Laeufe eines Tagesblocks. Alle muessen im selben Block liegen, sonst ist unklar, welche gemeint sind."""
+    """Runs of one half day. All of them must be in the same block, otherwise it is unclear which are meant."""
     if strava_ids:
         runs = [a for a in (strava_client.get_activity(i) for i in strava_ids) if is_run(a)]
     else:
         if not date:
-            raise RunSyncError("bad_request", "date oder strava_ids fehlt")
+            raise RunSyncError("bad_request", "date or strava_ids is missing")
         day = datetime.strptime(date, "%Y-%m-%d")
-        # Strava filtert nach UTC, deshalb mit Puffer holen und dann nach Ortszeit filtern
+        # Strava filters by UTC, so fetch with a margin and then filter by local time
         found = strava_client.get_all_activities_in_timeframe(fmt(day - timedelta(days=1)), fmt(day + timedelta(days=2)))
         runs = [a for a in found if is_run(a) and a["start_date_local"][:10] == date]
         if daytime in ("morning", "afternoon"):
             matching = [a for a in runs if run_info(a)["daytime"] == daytime]
             if not matching:
-                raise RunSyncError("run_not_found", f"Kein Lauf am {date} ({daytime})", runs_that_day=[run_info(a) for a in runs])
+                raise RunSyncError("run_not_found", f"No run on {date} ({daytime})", runs_that_day=[run_info(a) for a in runs])
             runs = matching
     if not runs:
-        raise RunSyncError("run_not_found", f"Kein Lauf gefunden ({date or strava_ids})")
+        raise RunSyncError("run_not_found", f"No run found ({date or strava_ids})")
     runs.sort(key=lambda a: a["start_date_local"])
     infos = [run_info(a) for a in runs]
     if len({(i["start_local"][:10], i["daytime"]) for i in infos}) > 1:
-        raise RunSyncError("ambiguous_run", "Die Laeufe liegen in verschiedenen Tagesbloecken, bitte daytime angeben", runs_that_day=infos)
+        raise RunSyncError("ambiguous_run", "The runs are in different half days, please pass daytime", runs_that_day=infos)
     return runs
 
 
 def log_run(sheets_client, strava_client, garmin_client, date=None, daytime=None, strava_ids=None,
             what=None, shoe=None, thoughts=None):
-    """Details zu den Laeufen eines Tagesblocks (Vormittag oder Nachmittag) ueberall eintragen.
+    """Write the details of the runs of one half day (morning or afternoon) everywhere.
 
-    Leere Felder bleiben unveraendert. Jedes Ziel wird einzeln versucht, das Ergebnis meldet, was geklappt hat.
+    Empty fields stay unchanged. Each target is tried on its own; the result says what worked.
     """
     what, thoughts = (what or "").strip() or None, (thoughts or "").strip() or None
     shoe_entry = None
     if shoe:
         shoe_entry, options = shoes.resolve(shoe)
         if options:
-            raise RunSyncError("ambiguous_shoe", f"Schuh '{shoe}' ist nicht eindeutig", options=options)
+            raise RunSyncError("ambiguous_shoe", f"Shoe '{shoe}' is ambiguous", options=options)
         if not shoe_entry:
-            raise RunSyncError("unknown_shoe", f"Schuh '{shoe}' ist unbekannt, mit add_shoe anlegen")
+            raise RunSyncError("unknown_shoe", f"Shoe '{shoe}' is unknown, add it with add_shoe")
     runs = find_runs(strava_client, date, daytime, strava_ids)
     infos = [run_info(a) for a in runs]
     garmin_gear = shoe_entry["garmin"] if shoe_entry else None
@@ -237,23 +237,23 @@ def log_run(sheets_client, strava_client, garmin_client, date=None, daytime=None
                 result["strava"].append({"strava_id": info["strava_id"], "ok": False, "error": f"{type(e).__name__}: {e}"[:300]})
 
     if shoe_entry and not garmin_gear:
-        result["notes"].append(f"{shoe_entry['name']} gibt es auf Garmin nicht, dort wurde kein Schuh gesetzt. add_shoe kann ihn ergaenzen.")
+        result["notes"].append(f"{shoe_entry['name']} does not exist on Garmin, no shoe was set there. add_shoe can add it.")
     if shoe_entry and not strava_gear:
-        result["notes"].append(f"{shoe_entry['name']} gibt es auf Strava nicht, dort wurde kein Schuh gesetzt. add_shoe kann ihn ergaenzen.")
+        result["notes"].append(f"{shoe_entry['name']} does not exist on Strava, no shoe was set there. add_shoe can add it.")
     result["ok"] = result["sheet"]["ok"] and all(r["ok"] for r in result["garmin"] + result["strava"])
     return result
 
 
 def add_shoe(strava_client, garmin_client, name):
-    """Neuen Schuh aufnehmen oder einen bekannten auf der fehlenden Seite ergaenzen.
+    """Add a new shoe, or complete a known one on the side where it is missing.
 
-    Garmin: passenden, noch nicht zugeordneten Schuh verknuepfen, sonst neu anlegen.
-    Strava: passenden, noch nicht zugeordneten Schuh verknuepfen. Anlegen geht ueber die Strava-API nicht,
-    dann muss Lukas ihn in der Strava-App anlegen und add_shoe erneut aufrufen.
+    Garmin: link a matching shoe that is not mapped yet, otherwise create it.
+    Strava: link a matching shoe that is not mapped yet. The Strava API cannot create gear,
+    so the shoe has to be added in the Strava app first and add_shoe called again.
     """
     name = " ".join(name.split())
     if len(shoes.words(name)) < 2:
-        raise RunSyncError("bad_request", "Bitte Marke und Modell nennen, z.B. 'Nike Pegasus 41 Black'")
+        raise RunSyncError("bad_request", "Please give brand and model, e.g. 'Nike Pegasus 41 Black'")
     all_shoes = shoes.load_shoes()
     entry = next((s for s in all_shoes if s["name"].lower() == name.lower()), None)
     if entry is None:
@@ -283,8 +283,8 @@ def add_shoe(strava_client, garmin_client, name):
             entry["strava"], result["strava"] = free[match], f"linked to '{match}'"
         else:
             result["strava"] = "missing"
-            result["note"] = ("Strava erlaubt Apps nicht, Schuhe anzulegen. Lukas muss ihn in der Strava-App anlegen "
-                              "(Profil > Ausruestung), danach add_shoe erneut aufrufen, um ihn zu verknuepfen.")
+            result["note"] = ("Strava does not allow apps to create shoes. Add it in the Strava app "
+                              "(Profile > Gear), then call add_shoe again to link it.")
 
     shoes.save_shoes(all_shoes)
     return result

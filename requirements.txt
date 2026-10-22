@@ -1,4 +1,4 @@
-# Versionen fest, damit ein Update nichts unbemerkt veraendert
+# Pinned so that an update never changes anything unnoticed
 requests==2.33.0
 gspread==6.2.1
 python-dotenv==1.2.2

@@ -1,14 +1,14 @@
-"""Google Sheets: Lukas' Trainingstagebuch.
+"""Google Sheets: the training diary.
 
-Aufbau eines Wochenblatts (KW{woche}{jahr}, Sonntag bis Samstag):
-- Spalten B-O: je Tag zwei Spalten (Text, Zahl), Sonntag = B/C
-- Vormittag (Start vor 13 Uhr) Zeilen 3-5, Nachmittag Zeilen 6-8
-- 1. Zeile des Blocks: andere Aktivitaeten (Name, Minuten)
-- 2. Zeile: Laeufe (Hauptzelle, z.B. "70min easy", und Kilometer)
-- 3. Zeile: Notizen (Gedanken)
+Layout of a week worksheet (KW{week}{year}, Sunday to Saturday):
+- Columns B-O: two columns per day (text, number), Sunday = B/C
+- Morning (start before 1 pm) rows 3-5, afternoon rows 6-8
+- 1st row of a block: other activities (name, minutes)
+- 2nd row: runs (main cell, e.g. "70min easy", and kilometers)
+- 3rd row: notes (thoughts)
 
-Was RunSync eingetragen hat, steht im Protokoll (ledger.json). So landet keine Aktivitaet doppelt im Sheet, und
-ein spaeter korrigierter Text ersetzt den alten, statt angehaengt zu werden.
+Everything RunSync writes is recorded in ledger.json. That way no activity ends up in the sheet twice, and a
+corrected text replaces the previous one instead of being appended.
 """
 import json
 import os
@@ -60,8 +60,8 @@ def save_ledger(ledger):
 
 
 def slot_cells(date):
-    """Zellen fuer Tag und Tageszeit einer Aktivitaet."""
-    day_of_week = (date.weekday() + 1) % 7  # Sonntag = 0
+    """Cells for the day and time of day of an activity."""
+    day_of_week = (date.weekday() + 1) % 7  # Sunday = 0
     text_col = chr(ord("B") + day_of_week * 2)
     value_col = chr(ord(text_col) + 1)
     first = 3 if date.hour < 13 else 6
@@ -73,11 +73,11 @@ def slot_cells(date):
 
 
 def week_title(date):
-    """Name des Wochenblatts (Wochen von Sonntag bis Samstag)."""
+    """Name of the week worksheet (weeks run from Sunday to Saturday)."""
     days_since_sunday = (date.weekday() + 1) % 7
     week_start = date - timedelta(days=days_since_sunday)
     week_number = date.isocalendar()[1]
-    if date.weekday() == 6:  # Sonntag gehoert schon zur naechsten Woche
+    if date.weekday() == 6:  # Sunday already belongs to the next week
         week_number += 1
     return f"KW{week_number}{week_start.strftime('%y')}", week_number, week_start
 
@@ -94,7 +94,7 @@ class SheetsClient:
         self._cache_validity_minutes = 5
 
     def get_first_not_completed_day(self):
-        """Erster Tag im neuesten Wochenblatt, an dem noch nichts eingetragen ist."""
+        """First day in the newest week worksheet without any entry."""
         print("Getting first not completed day...")
         latest = self.sh.worksheets()[2]
         week_start = datetime.strptime(latest.acell("B1").value.split()[3], "%d.%m.%Y")
@@ -126,7 +126,7 @@ class SheetsClient:
         self._worksheets_cache_timestamp = None
 
     def week_worksheet(self, date):
-        """Wochenblatt fuer ein Datum, legt es bei Bedarf aus der Vorlage "leer" an."""
+        """Week worksheet for a date; created from the "leer" (empty) template if needed."""
         title, week_number, week_start = week_title(date)
         existing = next((ws for ws in self._get_worksheets_cached() if ws.title == title), None)
         if existing:
@@ -142,7 +142,7 @@ class SheetsClient:
                 raise
             return self.sh.worksheet(title)
 
-        # Uebersicht: Name in Spalte A, Link in Spalte K
+        # Overview ("Übersicht"): name in column A, link in column K
         overview = self.sh.worksheet("Übersicht")
         col_a = overview.col_values(1)
         col_k = overview.col_values(11)
@@ -161,7 +161,7 @@ class SheetsClient:
         return {cell: (r[0][0] if r and r[0] else None) for cell, r in zip(cells, result)}
 
     def _write(self, worksheet, updates):
-        """updates: {zelle: wert}. Zahlen werden als Zahlen gespeichert, Texte unveraendert."""
+        """updates: {cell: value}. Numbers are stored as numbers, texts as they are."""
         if not updates:
             return
         data = [{"range": cell, "values": [[value]]} for cell, value in updates.items()]
@@ -176,11 +176,11 @@ class SheetsClient:
                 time.sleep(60)
 
     def set_new_entry_from_json(self, activity, with_run_texts=True):
-        """Traegt eine Strava-Aktivitaet ein.
+        """Write a Strava activity into the sheet.
 
-        Laeufe: Kilometer (2 Nachkommastellen, zur Zelle addiert), mit with_run_texts auch Beschreibung als
-        Hauptzelle und private Notiz als Notiz. Andere: Beschreibung oder Name, Minuten, private Notiz.
-        Gibt False zurueck, wenn die Aktivitaet schon im Protokoll steht.
+        Runs: kilometers (2 decimals, added to the cell); with with_run_texts also the description as main cell and
+        the private note as notes. Others: description or name, minutes, private note.
+        Returns False if the activity is already in the ledger.
         """
         activity_id = str(activity["id"])
         with ledger_lock:
@@ -218,7 +218,7 @@ class SheetsClient:
         return True
 
     def read_run_cells(self, start_local):
-        """Aktuelle Hauptzelle, Kilometer und Notiz des Lauf-Blocks."""
+        """Current main cell, kilometers and notes of the run block."""
         date = datetime.fromisoformat(start_local)
         cells = slot_cells(date)
         keys = ("run_text", "run_value", "notes")
@@ -226,9 +226,9 @@ class SheetsClient:
         return {k: values[cells[k]] for k in keys}
 
     def set_run_texts(self, start_local, main_text=None, notes=None):
-        """Hauptzelle und Notiz des Lauf-Blocks setzen (Vormittag oder Nachmittag des Tages).
+        """Set main cell and notes of the run block (morning or afternoon of that day).
 
-        Ein frueher von RunSync geschriebener Text wird ersetzt, fremder Text bleibt stehen und der neue kommt darunter.
+        Text RunSync wrote before is replaced; other text stays and the new text goes below it.
         """
         date = datetime.fromisoformat(start_local)
         worksheet = self.week_worksheet(date)
@@ -260,13 +260,13 @@ class SheetsClient:
         return {"sheet": worksheet.title, "cells": list(updates)}
 
     def get_empty_p4_p7_worksheets(self):
-        """Wochenblaetter ohne P4/P7-Werte, vom neuesten bis zum ersten ausgefuellten."""
+        """Week worksheets without P4/P7 values, from the newest down to the first filled one."""
         print("Getting empty P4/P7 worksheets...")
         worksheets = [ws for ws in self._get_worksheets_cached() if ws.title not in ["Übersicht", "leer"]]
         empty = []
         for i, ws in enumerate(worksheets):
             if i:
-                time.sleep(0.3)  # Rate Limit von Google
+                time.sleep(0.3)  # Google rate limit
             for attempt in range(2):
                 try:
                     values = ws.batch_get(["P4", "P7"])
