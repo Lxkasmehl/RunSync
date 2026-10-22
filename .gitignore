@@ -4,3 +4,5 @@ ledger.json
 service-account*.json
 __pycache__/
 CLAUDE.md
+.idea/
+.vscode/

@@ -4,6 +4,7 @@ GET  /ping                      lebt der Dienst
 GET  /shoes                     Schuhliste (shoes.json)
 POST /activity/new  {"id": 123} neue Strava-Aktivitaet: Zahl ins Sheet, Infos zurueck (is_run, start_local, distance_km)
 POST /run/log       {"date": "2026-10-20", "daytime": "morning", "strava_ids": [...], "what": ..., "shoe": ..., "thoughts": ...}
+POST /runs/undocumented {"days": 14}   Laeufe, bei denen im Sheet Hauptzelle oder Notiz fehlt
 POST /classic/sheets            Strava -> Sheet ab dem ersten leeren Tag
 POST /classic/garmin {"days": 14, "stop_at_transferred": true}   Strava -> Garmin
 POST /classic/p4p7              Yoga/Workout-Anzahl der abgeschlossenen Wochen
@@ -53,6 +54,7 @@ ROUTES = {
     ("GET", "/shoes"): lambda body: {"shoes": [s["name"] for s in shoes.load_shoes()]},
     ("POST", "/activity/new"): lambda body: main_app.new_activity(sheets(), strava, body["id"]),
     ("POST", "/run/log"): run_log,
+    ("POST", "/runs/undocumented"): lambda body: main_app.undocumented_runs(sheets(), strava, days=int(body.get("days") or 14)),
     ("POST", "/classic/sheets"): lambda body: main_app.update_sheets_data(sheets(), strava),
     ("POST", "/classic/garmin"): lambda body: main_app.transfer_to_garmin(
         strava, garmin, days=int(body.get("days") or 14), stop_at_transferred=body.get("stop_at_transferred", True)),

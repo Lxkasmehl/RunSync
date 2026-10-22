@@ -11,6 +11,7 @@ Zwei Wege, je nachdem wo das Training dokumentiert wird:
    new_activity         neue Strava-Aktivitaet: Kilometer bzw. Minuten sofort ins Sheet
    log_run              "was, welche Schuhe, Gedanken" -> Sheet (Hauptzelle, Notiz), Garmin (Beschreibung, Schuhe),
                         Strava (Schuhe, private Notiz; nichts Oeffentliches)
+   undocumented_runs    Laeufe der letzten Tage, bei denen im Sheet Hauptzelle oder Notiz fehlt
 
 Aufruf lokal: python main_app.py update_sheets_data | update_p4_p7 | transfer_to_garmin [tage] | seed_ledger
 """
@@ -144,6 +145,24 @@ def new_activity(sheets_client, strava_client, activity_id):
         return info | {"sheet": "skipped"}
     added = sheets_client.set_new_entry_from_json(activity, with_run_texts=False)
     return info | {"sheet": "added" if added else "already"}
+
+
+def undocumented_runs(sheets_client, strava_client, days=14):
+    """Halbtage mit Laeufen der letzten Tage, bei denen im Sheet Hauptzelle oder Notiz leer ist, aelteste zuerst."""
+    end = datetime.now()
+    found = strava_client.get_all_activities_in_timeframe(fmt(end - timedelta(days=days)), fmt(end))
+    blocks = {}
+    for activity in sorted((a for a in found if is_run(a)), key=lambda a: a["start_date_local"]):
+        info = run_info(activity)
+        blocks.setdefault((info["start_local"][:10], info["daytime"]), []).append(info)
+    result = []
+    for (date, daytime), runs in blocks.items():
+        cells = sheets_client.read_run_cells(runs[0]["start_local"])
+        missing = [name for name, key in (("what", "run_text"), ("thoughts", "notes")) if not (cells[key] or "").strip()]
+        if missing:
+            result.append({"date": date, "daytime": daytime, "distance_km": round(sum(r["distance_km"] for r in runs), 2),
+                           "strava_ids": [r["strava_id"] for r in runs], "missing": missing})
+    return {"days": days, "undocumented": result}
 
 
 def find_runs(strava_client, date=None, daytime=None, strava_ids=None):

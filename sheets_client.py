@@ -217,6 +217,13 @@ class SheetsClient:
         print(f"Activity {activity_id} -> {worksheet.title} {value_cell} (+{value})")
         return True
 
+    def read_run_cells(self, start_local):
+        """Aktuelle Hauptzelle und Notiz des Lauf-Blocks."""
+        date = datetime.fromisoformat(start_local)
+        cells = slot_cells(date)
+        values = self._read(self.week_worksheet(date), [cells["run_text"], cells["notes"]])
+        return {"run_text": values[cells["run_text"]], "notes": values[cells["notes"]]}
+
     def set_run_texts(self, start_local, main_text=None, notes=None):
         """Hauptzelle und Notiz des Lauf-Blocks setzen (Vormittag oder Nachmittag des Tages).
 
