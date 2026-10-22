@@ -56,6 +56,7 @@ class Shoes(unittest.TestCase):
     def test_ambiguous(self):
         self.check("Invincible 3, in dem blauen", ["Nike Invincible 3 Blue (DE)", "Nike Invincible 3 Blue (US)"])
         self.check("Structures", ["Nike Structure 25 Bowerman", "Nike Structure 25 White Blue"])
+        self.check("Die Strukturen", ["Nike Structure 25 Bowerman", "Nike Structure 25 White Blue"])
 
     def test_unknown(self):
         # Model number must match: never silently pick the Pegasus 40 Black

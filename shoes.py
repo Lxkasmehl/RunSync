@@ -15,8 +15,9 @@ DATA_FILE = os.path.join(os.environ["DATA_DIR"], "shoes.json") if os.getenv("DAT
 # Map German colors (also inflected: "blauen", "weisse") to the English names used in the shoe list
 COLORS = {"blau": "blue", "weiss": "white", "weiß": "white", "rot": "red", "grau": "grey", "gray": "grey",
           "grün": "green", "gruen": "green", "schwarz": "black", "silber": "silver", "hellgrün": "light green"}
-# Where a pair was bought ("die ich in den USA habe", "die deutschen") maps to the (US)/(DE) suffix
-ORIGINS = {"usa": "us", "amerika": "us", "deutsch": "de"}
+# Where a pair was bought ("die ich in den USA habe", "die deutschen") maps to the (US)/(DE) suffix,
+# German spellings of model names ("Strukturen") to the English ones
+ORIGINS = {"usa": "us", "amerika": "us", "deutsch": "de", "struktur": "structure"}
 FILLER = {"der", "die", "das", "den", "dem", "in", "im", "mit", "meinen", "meine", "meinem", "mein", "the", "my",
           "schuh", "schuhe", "schuhen", "paar", "neuen", "alten", "gelaufen", "and", "und"}
 
