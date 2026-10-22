@@ -1,496 +1,276 @@
-import locale
+"""Google Sheets: Lukas' Trainingstagebuch.
+
+Aufbau eines Wochenblatts (KW{woche}{jahr}, Sonntag bis Samstag):
+- Spalten B-O: je Tag zwei Spalten (Text, Zahl), Sonntag = B/C
+- Vormittag (Start vor 13 Uhr) Zeilen 3-5, Nachmittag Zeilen 6-8
+- 1. Zeile des Blocks: andere Aktivitaeten (Name, Minuten)
+- 2. Zeile: Laeufe (Hauptzelle, z.B. "70min easy", und Kilometer)
+- 3. Zeile: Notizen (Gedanken)
+
+Was RunSync eingetragen hat, steht im Protokoll (ledger.json). So landet keine Aktivitaet doppelt im Sheet, und
+ein spaeter korrigierter Text ersetzt den alten, statt angehaengt zu werden.
+"""
+import json
 import os
+import threading
 import time
 from datetime import datetime, timedelta
 
 import gspread
-import math
-
 from dotenv import load_dotenv
 from gspread.exceptions import APIError
 from gspread.utils import Dimension
 
-# Load environment variables from .env file
 load_dotenv()
 
-# Create a Google Sheets client using the service account credentials
-import json
+LEDGER_FILE = os.path.join(os.getenv("DATA_DIR", "."), "ledger.json")
+ledger_lock = threading.Lock()
 
-# Get service account credentials from environment variable
-file_path = os.getenv('FILE_PATH')
-if file_path and os.path.exists(file_path):
-    # If FILE_PATH is a file path, read from file
-    sa = gspread.service_account(filename=file_path)
-else:
-    # If FILE_PATH is JSON content directly, parse it
-    service_account_info = os.getenv('SERVICE_ACCOUNT_JSON')
-    if service_account_info:
-        credentials_dict = json.loads(service_account_info)
-        sa = gspread.service_account_from_dict(credentials_dict)
+
+def open_spreadsheet():
+    file_path = os.getenv("FILE_PATH")
+    if file_path and os.path.exists(file_path):
+        sa = gspread.service_account(filename=file_path)
+    elif os.getenv("SERVICE_ACCOUNT_JSON"):
+        sa = gspread.service_account_from_dict(json.loads(os.getenv("SERVICE_ACCOUNT_JSON")))
     else:
         raise ValueError("Either FILE_PATH (file path) or SERVICE_ACCOUNT_JSON (JSON content) must be provided")
+    return sa.open(os.getenv("DOCUMENT_NAME"))
 
-sh = sa.open(os.getenv('DOCUMENT_NAME'))
 
-# Set the locale to German for date formatting
-try:
-    locale.setlocale(locale.LC_ALL, 'de_DE')
-except locale.Error:
+def parse_number(value):
     try:
-        # Try alternative German locale formats
-        locale.setlocale(locale.LC_ALL, 'de_DE.UTF-8')
-    except locale.Error:
-        try:
-            locale.setlocale(locale.LC_ALL, 'de_DE.utf8')
-        except locale.Error:
-            # Fall back to system default if German locale is not available
-            print("Warning: German locale not available, using system default")
-            pass
+        return float(str(value).replace(",", ".")) if value not in (None, "", "None") else 0.0
+    except ValueError:
+        return 0.0
+
+
+def load_ledger():
+    if os.path.exists(LEDGER_FILE):
+        with open(LEDGER_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    return {"activities": {}, "texts": {}}
+
+
+def save_ledger(ledger):
+    tmp = LEDGER_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(ledger, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, LEDGER_FILE)
+
+
+def slot_cells(date):
+    """Zellen fuer Tag und Tageszeit einer Aktivitaet."""
+    day_of_week = (date.weekday() + 1) % 7  # Sonntag = 0
+    text_col = chr(ord("B") + day_of_week * 2)
+    value_col = chr(ord(text_col) + 1)
+    first = 3 if date.hour < 13 else 6
+    return {
+        "other_text": f"{text_col}{first}", "other_value": f"{value_col}{first}",
+        "run_text": f"{text_col}{first + 1}", "run_value": f"{value_col}{first + 1}",
+        "notes": f"{text_col}{first + 2}",
+    }
+
+
+def week_title(date):
+    """Name des Wochenblatts (Wochen von Sonntag bis Samstag)."""
+    days_since_sunday = (date.weekday() + 1) % 7
+    week_start = date - timedelta(days=days_since_sunday)
+    week_number = date.isocalendar()[1]
+    if date.weekday() == 6:  # Sonntag gehoert schon zur naechsten Woche
+        week_number += 1
+    return f"KW{week_number}{week_start.strftime('%y')}", week_number, week_start
+
+
+def activity_date(activity):
+    return datetime.fromisoformat(activity["start_date_local"].replace("Z", ""))
+
 
 class SheetsClient:
-    """
-    A class to interact with Google Sheets
-    """
+    def __init__(self):
+        self.sh = open_spreadsheet()
+        self._worksheets_cache = None
+        self._worksheets_cache_timestamp = None
+        self._cache_validity_minutes = 5
+
     def get_first_not_completed_day(self):
-        """
-        Get the first not completed day in the latest week worksheet
-        """
+        """Erster Tag im neuesten Wochenblatt, an dem noch nichts eingetragen ist."""
         print("Getting first not completed day...")
-
-        # Get the latest week worksheet
-        latestWeekWorksheet = sh.worksheets()[2]
-
-        # Extract the week and timeframe from cell B1
-        weekAndTimeframe = latestWeekWorksheet.acell("B1").value.split()
-
-        # Parse the week start date from the extracted timeframe
-        weekStartDate = datetime.strptime(weekAndTimeframe[3], '%d.%m.%Y')
-
-        # Get the data range from B3:O8, column-major
-        data_range = latestWeekWorksheet.get(range_name='B3:O8', major_dimension=Dimension.cols)
-
-        # Remove empty rows from the data range
-        while data_range:
-            if all(x in ['', '0', None] for x in data_range[-1]):
-                data_range.pop()
-            else:
-                break
-
-        # Calculate the first not completed day
-        first_not_completed_day = weekStartDate + timedelta(days=len(data_range) / 2)
+        latest = self.sh.worksheets()[2]
+        week_start = datetime.strptime(latest.acell("B1").value.split()[3], "%d.%m.%Y")
+        data_range = latest.get(range_name="B3:O8", major_dimension=Dimension.cols)
+        while data_range and all(x in ["", "0", None] for x in data_range[-1]):
+            data_range.pop()
+        first_not_completed_day = week_start + timedelta(days=len(data_range) / 2)
         print("First not completed day:", first_not_completed_day)
         return first_not_completed_day
 
-    def __init__(self):
-        # Cache for worksheets to avoid repeated API calls
-        self._worksheets_cache = None
-        self._worksheets_cache_timestamp = None
-        self._cache_validity_minutes = 5  # Cache is valid for 5 minutes
-    
     def _get_worksheets_cached(self):
-        """
-        Get worksheets with caching to reduce API calls
-        """
-        current_time = datetime.now()
-        
-        # Check if cache is still valid
-        if (self._worksheets_cache is not None and 
-            self._worksheets_cache_timestamp is not None and
-            (current_time - self._worksheets_cache_timestamp).total_seconds() < self._cache_validity_minutes * 60):
+        now = datetime.now()
+        if (self._worksheets_cache is not None
+                and (now - self._worksheets_cache_timestamp).total_seconds() < self._cache_validity_minutes * 60):
             return self._worksheets_cache
-        
-        # Cache expired or doesn't exist, fetch fresh data
-        print("Fetching fresh worksheets list...")
-        try:
-            self._worksheets_cache = sh.worksheets()
-            self._worksheets_cache_timestamp = current_time
-            return self._worksheets_cache
-        except APIError as e:
-            if e.code == 429:  # Rate limit exceeded
+        for attempt in range(2):
+            try:
+                self._worksheets_cache = self.sh.worksheets()
+                self._worksheets_cache_timestamp = now
+                return self._worksheets_cache
+            except APIError as e:
+                if e.code != 429 or attempt:
+                    raise
                 print("Rate limit exceeded while fetching worksheets list. Waiting 60 seconds...")
                 time.sleep(60)
-                # Retry once
-                try:
-                    self._worksheets_cache = sh.worksheets()
-                    self._worksheets_cache_timestamp = current_time
-                    return self._worksheets_cache
-                except Exception as retry_e:
-                    print(f"Failed to fetch worksheets after retry: {retry_e}")
-                    raise
-            else:
-                raise
-    
+
     def _clear_worksheets_cache(self):
-        """
-        Clear the worksheets cache (call this when creating new worksheets)
-        """
         self._worksheets_cache = None
         self._worksheets_cache_timestamp = None
 
-    def set_new_entry_from_json(self, activityDetails):
-        """
-        Set a new entry in the Google Sheets from a JSON object
-        """
-        print("Setting new entry from JSON...")
+    def week_worksheet(self, date):
+        """Wochenblatt fuer ein Datum, legt es bei Bedarf aus der Vorlage "leer" an."""
+        title, week_number, week_start = week_title(date)
+        existing = next((ws for ws in self._get_worksheets_cached() if ws.title == title), None)
+        if existing:
+            return existing
 
-        # Extract the date from the activity details
-        date_str = activityDetails['start_date_local']
-        date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+        print("Creating new worksheet:", title)
+        self._clear_worksheets_cache()
+        try:
+            template = self.sh.worksheet("leer")
+            worksheet = self.sh.duplicate_sheet(source_sheet_id=template.id, insert_sheet_index=2, new_sheet_name=title)
+        except APIError as e:
+            if "already exists" not in str(e):
+                raise
+            return self.sh.worksheet(title)
 
-        # Calculate the week number and worksheet title for Sunday-Saturday weeks
-        # Get the start of the week (Sunday) for the given date
-        days_since_sunday = (date.weekday() + 1) % 7  # Convert Monday=0 to Sunday=0
-        week_start = date - timedelta(days=days_since_sunday)
-        
-        # Calculate week number based on Sunday-Saturday weeks
-        # Use the year of the week start date
-        year = week_start.year
-        # Calculate week number: week of year starting from first Sunday
-        first_sunday_of_year = datetime(year, 1, 1)
-        days_to_first_sunday = (6 - first_sunday_of_year.weekday()) % 7
-        if days_to_first_sunday == 0 and first_sunday_of_year.weekday() != 6:
-            days_to_first_sunday = 7
-        first_sunday_of_year += timedelta(days=days_to_first_sunday)
+        # Uebersicht: Name in Spalte A, Link in Spalte K
+        overview = self.sh.worksheet("Übersicht")
+        col_a = overview.col_values(1)
+        col_k = overview.col_values(11)
+        if title not in col_a:
+            overview.update_acell(f"A{len(col_a) + 1}", title)
+        if not any("HYPERLINK(" in str(v) and title in str(v) for v in col_k):
+            url = f"https://docs.google.com/spreadsheets/d/{self.sh.id}/edit#gid={worksheet.id}"
+            overview.update_acell(f"K{len(col_k) + 1}", f'=HYPERLINK("{url}";"{title}")')
 
-                # Calculate the week number and worksheet title
-        week_number = date.isocalendar()[1]
-        
-        # If the weekday is Sunday, increment the week number by 1
-        if date.weekday() == 6:  # Sunday is 6 in Python's weekday() (Monday=0, Sunday=6)
-            week_number += 1
+        week_end = week_start + timedelta(days=6)
+        worksheet.update_acell("B1", f"KW {week_number}{week_start.strftime('%y')} - {week_start:%d.%m.%Y} - {week_end:%d.%m.%Y}")
+        return worksheet
 
-        worksheet_title = f"KW{week_number}{week_start.strftime('%y')}"
+    def _read(self, worksheet, cells):
+        result = worksheet.batch_get(cells)
+        return {cell: (r[0][0] if r and r[0] else None) for cell, r in zip(cells, result)}
 
-        # Get the list of existing worksheets from cache
-        worksheets = self._get_worksheets_cached()
-
-        # Check if the worksheet already exists
-        existing_worksheet = next((ws for ws in worksheets if ws.title == worksheet_title), None)
-        
-        # If worksheet doesn't exist, clear cache immediately to prevent race conditions
-        if existing_worksheet is None:
-            self._clear_worksheets_cache()
-
-        if existing_worksheet is None:
-            print("Creating new worksheet:", worksheet_title)
-            
-            # Try to create the worksheet, handle race conditions
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    # Create a new worksheet from a template
-                    template_worksheet = sh.worksheet("leer")
-                    new_worksheet = sh.duplicate_sheet(source_sheet_id=template_worksheet.id, insert_sheet_index=2,
-                                                       new_sheet_name=worksheet_title)
-                    break  # Success, exit retry loop
-                except APIError as e:
-                    if "already exists" in str(e) and attempt < max_retries - 1:
-                        print(f"Worksheet {worksheet_title} already exists, retrying... (attempt {attempt + 1})")
-                        # Clear cache and try to get the existing worksheet
-                        self._clear_worksheets_cache()
-                        worksheets = self._get_worksheets_cached()
-                        existing_worksheet = next((ws for ws in worksheets if ws.title == worksheet_title), None)
-                        if existing_worksheet:
-                            print(f"Found existing worksheet {worksheet_title}, using it instead")
-                            new_worksheet = existing_worksheet
-                            break
-                        time.sleep(0.5)  # Small delay before retry
-                    else:
-                        raise  # Re-raise if it's not a duplicate error or we're out of retries
-
-            # Update the overview worksheet with the new worksheet title
-            overview_ws = sh.worksheet("Übersicht")
-            cell_list_A = overview_ws.col_values(1)
-            cell_list_K = overview_ws.col_values(11)
-
-            # Collect overview updates to do them in batch
-            overview_updates = []
-            
-            if worksheet_title not in cell_list_A:
-                next_available_row_A = len(cell_list_A) + 1
-                overview_updates.append((f"A{next_available_row_A}", worksheet_title))
-
-            # Check if hyperlink already exists in column K
-            hyperlink_exists = False
-            for i, cell_value in enumerate(cell_list_K):
-                if cell_value and ('=HYPERLINK(' in str(cell_value) or 'HYPERLINK(' in str(cell_value)) and worksheet_title in str(cell_value):
-                    hyperlink_exists = True
-                    break
-            
-            if not hyperlink_exists:
-                next_available_row_K = len(cell_list_K) + 1
-                # Use the new_worksheet object directly instead of looking it up again
-                worksheet_url = f"https://docs.google.com/spreadsheets/d/{sh.id}/edit#gid={new_worksheet.id}"
-                # Use proper HYPERLINK formula syntax with semicolon separator
-                hyperlink_formula = f'=HYPERLINK("{worksheet_url}";"{worksheet_title}")'
-                overview_updates.append((f"K{next_available_row_K}", hyperlink_formula))
-
-            # Update regular cells in batch
-            if overview_updates:
-                batch_data = [{'range': cell, 'values': [[value]]} for cell, value in overview_updates]
-                overview_ws.batch_update(batch_data)
-                print(f"Updated {len(overview_updates)} regular cells in batch")
-            
-            # Update hyperlink separately using update_acell to ensure it's treated as a formula
-            if not hyperlink_exists:
-                overview_ws.update_acell(f"K{next_available_row_K}", hyperlink_formula)
-                print(f"Updated hyperlink in K{next_available_row_K}")
-
-            # Set the header row in the new worksheet with Sunday-Saturday week range
-            week_start_sunday = week_start
-            week_end_saturday = week_start_sunday + timedelta(days=6)
-            new_worksheet.update_acell("B1:O1",
-                                       f"KW {week_number}{week_start_sunday.strftime('%y')} - {week_start_sunday:%d.%m.%Y} - {week_end_saturday:%d.%m.%Y}")
-        else:
-            print("Using existing worksheet:", worksheet_title)
-            new_worksheet = existing_worksheet
-
-        # Calculate the day of the week and column offset for Sunday-Saturday format
-        # Convert to Sunday=0, Monday=1, ..., Saturday=6
-        day_of_week = (date.weekday() + 1) % 7
-        column_offset = day_of_week * 2
-        column_range = chr(ord('B') + column_offset) + ":" + chr(ord('B') + column_offset + 1)
-
-        # Calculate the row range based on the time of day
-        row_range = "3:5" if date.hour < 13 else "6:8"
-
-        # Collect all updates to do them in batches
-        updates = []
-        
-        # Define a helper function to collect cell updates
-        def collect_update(cell, text, is_additive=False, existing_value=None):
-            """
-            Collect a cell update for batch processing
-            """
-            if is_additive:
-                try:
-                    # Handle both None and 'None' string cases
-                    if existing_value and existing_value != 'None' and str(existing_value).strip():
-                        # Convert to string first, then replace comma with dot, then convert to float
-                        existing_val = float(str(existing_value).replace(',', '.'))
-                    else:
-                        existing_val = 0
-                except (ValueError, TypeError) as e:
-                    existing_val = 0
-                
-                new_val = existing_val + text
-                formatted_val = locale.format_string("%.2f", new_val)
-                updates.append((cell, formatted_val))
-            else:
-                if existing_value:
-                    updates.append((cell, f"{existing_value}\n{text}"))
-                else:
-                    updates.append((cell, text))
-        
-        # Define a helper function to get existing values in batch
-        def get_existing_values_batch(cells):
-            """
-            Get multiple cell values in one API call
-            """
+    def _write(self, worksheet, updates):
+        """updates: {zelle: wert}. Zahlen werden als Zahlen gespeichert, Texte unveraendert."""
+        if not updates:
+            return
+        data = [{"range": cell, "values": [[value]]} for cell, value in updates.items()]
+        for attempt in range(2):
             try:
-                # Use batch_get to get multiple cells at once
-                cell_list = [f"{cell}" for cell in cells]
-                result = new_worksheet.batch_get(cell_list)
-                
-                # batch_get returns a list of lists, where each inner list contains values for one range
-                # For individual cells, each cell gets its own list in the result
-                result_dict = {}
-                for i, cell in enumerate(cells):
-                    if i < len(result) and result[i] and len(result[i]) > 0:
-                        # Get the first (and only) value from the cell's result list
-                        cell_value = result[i][0] if result[i][0] else None
-                        # If the cell_value is still a list (shouldn't happen but just in case), get the first element
-                        if isinstance(cell_value, list) and len(cell_value) > 0:
-                            cell_value = cell_value[0]
-                        result_dict[cell] = cell_value
-                    else:
-                        result_dict[cell] = None
-                
-                return result_dict
-            except Exception as e:
-                print(f"Error getting batch values: {e}")
-                return {cell: None for cell in cells}
-
-        # Get all existing values we need in one batch call
-        cells_to_check = []
-        if activityDetails['sport_type'] == 'Run':
-            cells_to_check.extend([
-                column_range[0] + str(int(row_range.split(":")[0]) + 1),  # Description cell
-                column_range[0] + row_range.split(":")[1],                 # Private note cell
-                column_range[2] + str(int(row_range.split(":")[0]) + 1)   # Distance cell
-            ])
-        else:
-            cells_to_check.extend([
-                column_range[0] + row_range.split(":")[0],                # Description/name cell
-                column_range[0] + row_range.split(":")[1],                # Private note cell
-                column_range[2] + row_range.split(":")[0]                 # Moving time cell
-            ])
-        
-        # Add a small delay to ensure any previous updates are processed
-        time.sleep(0.2)
-        
-        existing_values = get_existing_values_batch(cells_to_check)
-        
-        # Process the activity details based on the sport type
-        if activityDetails['sport_type'] == 'Run':
-            print("Processing Run activity...")
-            # Update cells for Run activity
-            if 'description' in activityDetails:
-                collect_update(
-                    column_range[0] + str(int(row_range.split(":")[0]) + 1), 
-                    activityDetails['description'],
-                    existing_value=existing_values[column_range[0] + str(int(row_range.split(":")[0]) + 1)]
-                )
-            if 'private_note' in activityDetails:
-                collect_update(
-                    column_range[0] + row_range.split(":")[1], 
-                    activityDetails['private_note'],
-                    existing_value=existing_values[column_range[0] + row_range.split(":")[1]]
-                )
-            distance_km = activityDetails['distance'] / 1000
-            rounded_distance = math.floor(distance_km * 2 + 0.5) / 2
-            collect_update(
-                column_range[2] + str(int(row_range.split(":")[0]) + 1), 
-                rounded_distance,
-                is_additive=True,
-                existing_value=existing_values[column_range[2] + str(int(row_range.split(":")[0]) + 1)]
-            )
-        else:
-            print("Processing other activity...")
-            # Update cells for other activities
-            if activityDetails['description'] is not None and activityDetails['description'] != '':
-                collect_update(
-                    column_range[0] + row_range.split(":")[0], 
-                    activityDetails['description'],
-                    existing_value=existing_values[column_range[0] + row_range.split(":")[0]]
-                )
-            elif 'name' in activityDetails:
-                collect_update(
-                    column_range[0] + row_range.split(":")[0], 
-                    activityDetails['name'],
-                    existing_value=existing_values[column_range[0] + row_range.split(":")[0]]
-                )
-            if 'private_note' in activityDetails:
-                collect_update(
-                    column_range[0] + row_range.split(":")[1], 
-                    activityDetails['private_note'],
-                    existing_value=existing_values[column_range[0] + row_range.split(":")[1]]
-                )
-            if 'moving_time' in activityDetails:
-                moving_time_minutes = round(activityDetails['moving_time'] / 60)
-                collect_update(
-                    column_range[2] + row_range.split(":")[0], 
-                    moving_time_minutes,
-                    is_additive=True,
-                    existing_value=existing_values[column_range[2] + row_range.split(":")[0]]
-                )
-        
-        # Execute all updates in one batch call
-        if updates:
-            print(f"Executing {len(updates)} updates in batch...")
-            try:
-                # Use batch_update with proper format: list of dicts with 'range' and 'values'
-                batch_data = [{'range': cell, 'values': [[value]]} for cell, value in updates]
-                new_worksheet.batch_update(batch_data)
-                print("Batch update completed successfully!")
-                
-                # Add small delay after successful batch update to respect rate limits
-                time.sleep(0.2)
-                
+                worksheet.batch_update(data)
+                return
             except APIError as e:
-                if e.code == 429:
-                    print("Rate limit exceeded during batch update. Waiting 60 seconds...")
-                    time.sleep(60)
-                    # Retry the batch update
-                    try:
-                        new_worksheet.batch_update(batch_data)
-                        print("Batch update retry completed successfully!")
-                        time.sleep(0.2)  # Small delay after retry
-                    except Exception as retry_e:
-                        print(f"Batch update retry failed: {retry_e}")
-                        # Fallback to individual updates if batch fails
-                        for cell, value in updates:
-                            try:
-                                new_worksheet.update_acell(cell, value)
-                                time.sleep(0.5)  # Longer delay for individual updates
-                            except Exception as fallback_e:
-                                print(f"Failed to update {cell}: {fallback_e}")
+                if e.code != 429 or attempt:
+                    raise
+                print("Rate limit exceeded during batch update. Waiting 60 seconds...")
+                time.sleep(60)
+
+    def set_new_entry_from_json(self, activity, with_run_texts=True):
+        """Traegt eine Strava-Aktivitaet ein.
+
+        Laeufe: Kilometer (2 Nachkommastellen, zur Zelle addiert), mit with_run_texts auch Beschreibung als
+        Hauptzelle und private Notiz als Notiz. Andere: Beschreibung oder Name, Minuten, private Notiz.
+        Gibt False zurueck, wenn die Aktivitaet schon im Protokoll steht.
+        """
+        activity_id = str(activity["id"])
+        with ledger_lock:
+            if activity_id in load_ledger()["activities"]:
+                print(f"Activity {activity_id} already in sheet, skipping")
+                return False
+
+        date = activity_date(activity)
+        worksheet = self.week_worksheet(date)
+        cells = slot_cells(date)
+        is_run = activity["sport_type"] in ("Run", "TrailRun", "VirtualRun")
+        value_cell = cells["run_value"] if is_run else cells["other_value"]
+        text_cell = cells["run_text"] if is_run else cells["other_text"]
+        current = self._read(worksheet, [value_cell, text_cell, cells["notes"]])
+
+        if is_run:
+            value = round(activity["distance"] / 1000, 2)
+            texts = {text_cell: activity.get("description"), cells["notes"]: activity.get("private_note")} if with_run_texts else {}
+        else:
+            value = round(activity["moving_time"] / 60)
+            texts = {text_cell: activity.get("description") or activity.get("name"), cells["notes"]: activity.get("private_note")}
+
+        updates = {value_cell: round(parse_number(current[value_cell]) + value, 2)}
+        for cell, text in texts.items():
+            if text:
+                updates[cell] = f"{current[cell]}\n{text}" if current[cell] else text
+        self._write(worksheet, updates)
+
+        with ledger_lock:
+            ledger = load_ledger()
+            ledger["activities"][activity_id] = {"sheet": worksheet.title, "cell": value_cell, "value": value,
+                                                 "at": datetime.now().isoformat(timespec="seconds")}
+            save_ledger(ledger)
+        print(f"Activity {activity_id} -> {worksheet.title} {value_cell} (+{value})")
+        return True
+
+    def set_run_texts(self, start_local, main_text=None, notes=None):
+        """Hauptzelle und Notiz des Lauf-Blocks setzen (Vormittag oder Nachmittag des Tages).
+
+        Ein frueher von RunSync geschriebener Text wird ersetzt, fremder Text bleibt stehen und der neue kommt darunter.
+        """
+        date = datetime.fromisoformat(start_local)
+        worksheet = self.week_worksheet(date)
+        cells = slot_cells(date)
+        wanted = {cells["run_text"]: main_text, cells["notes"]: notes}
+        wanted = {cell: text.strip() for cell, text in wanted.items() if text and text.strip()}
+        current = self._read(worksheet, list(wanted))
+
+        with ledger_lock:
+            ledger = load_ledger()
+            updates = {}
+            for cell, text in wanted.items():
+                key = f"{worksheet.title}!{cell}"
+                old = current[cell] or ""
+                previous = ledger["texts"].get(key)
+                if text in old:
+                    pass
+                elif previous and previous in old:
+                    updates[cell] = old.replace(previous, text)
+                elif old.strip():
+                    updates[cell] = f"{old}\n{text}"
                 else:
-                    print(f"Batch update failed: {e}")
-                    # Fallback to individual updates
-                    for cell, value in updates:
-                        try:
-                            new_worksheet.update_acell(cell, value)
-                            time.sleep(0.5)  # Longer delay for individual updates
-                        except Exception as fallback_e:
-                            print(f"Failed to update {cell}: {fallback_e}")
+                    updates[cell] = text
+                ledger["texts"][key] = text
+            self._write(worksheet, updates)
+            save_ledger(ledger)
+        return {"sheet": worksheet.title, "cells": list(updates)}
 
     def get_empty_p4_p7_worksheets(self):
+        """Wochenblaetter ohne P4/P7-Werte, vom neuesten bis zum ersten ausgefuellten."""
         print("Getting empty P4/P7 worksheets...")
-        # Use cached worksheets to avoid repeated API calls
         worksheets = [ws for ws in self._get_worksheets_cached() if ws.title not in ["Übersicht", "leer"]]
-        
-        if not worksheets:
-            print("No worksheets found.")
-            return None
-        
-        print(f"Checking {len(worksheets)} worksheets with rate limiting...")
-        
-        # Get all P4 and P7 values in one batch call per worksheet
-        empty_worksheets = []
+        empty = []
         for i, ws in enumerate(worksheets):
-            try:
-                # Add rate limiting - wait 0.3 seconds between API calls to avoid 429 errors
-                if i > 0:  # Don't wait before the first call
-                    time.sleep(0.3)
-                
-                # Progress indicator every 10 worksheets
-                if i % 10 == 0:
-                    print(f"Progress: {i}/{len(worksheets)} worksheets checked...")
-                
-                # Get both P4 and P7 values in one API call
-                p4_p7_values = ws.batch_get(["P4", "P7"])
-                p4_value = p4_p7_values[0][0] if p4_p7_values[0] else None
-                p7_value = p4_p7_values[0][1] if len(p4_p7_values[0]) > 1 else None
-                
-                # Check if both P4 and P7 are empty (None, empty string, or "0")
-                p4_empty = not p4_value or p4_value == "" or p4_value == "0"
-                p7_empty = not p7_value or p7_value == "" or p7_value == "0"
-                
-                if p4_empty and p7_empty:
-                    empty_worksheets.append(ws)
-                else:
-                    print(f"Found non-empty P4/P7 in worksheet {ws.title} (P4: {p4_value}, P7: {p7_value})")
-                    # Stop when we find the first non-empty worksheet
+            if i:
+                time.sleep(0.3)  # Rate Limit von Google
+            for attempt in range(2):
+                try:
+                    values = ws.batch_get(["P4", "P7"])
                     break
-                    
-            except APIError as e:
-                if e.code == 429:  # Rate limit exceeded
-                    print(f"Rate limit exceeded while checking worksheet {ws.title}. Waiting 60 seconds...")
-                    time.sleep(60)  # Wait 60 seconds for rate limit to reset
-                    # Retry the same worksheet
-                    try:
-                        p4_p7_values = ws.batch_get(["P4", "P7"])
-                        p4_value = p4_p7_values[0][0] if p4_p7_values[0] else None
-                        p7_value = p4_p7_values[0][1] if len(p4_p7_values[0]) > 1 else None
-                        
-                        p4_empty = not p4_value or p4_value == "" or p4_value == "0"
-                        p7_empty = not p7_value or p7_value == "" or p7_value == "0"
-                        
-                        if p4_empty and p7_empty:
-                            empty_worksheets.append(ws)
-                        else:
-                            print(f"Found non-empty P4/P7 in worksheet {ws.title} after retry (P4: {p4_value}, P7: {p7_value})")
-                            break
-                    except Exception as retry_e:
-                        print(f"Error retrying worksheet {ws.title}: {retry_e}")
-                        continue
-                else:
-                    print(f"Error checking worksheet {ws.title}: {e}")
-                    continue
-            except Exception as e:
-                print(f"Error checking worksheet {ws.title}: {e}")
-                continue
-        
-        print(f"Found {len(empty_worksheets)} empty P4/P7 worksheets.")
-        return empty_worksheets
+                except APIError as e:
+                    if e.code != 429 or attempt:
+                        raise
+                    time.sleep(60)
+            p4 = values[0][0][0] if values[0] and values[0][0] else None
+            p7 = values[1][0][0] if values[1] and values[1][0] else None
+            if p4 in (None, "", "0") and p7 in (None, "", "0"):
+                empty.append(ws)
+            else:
+                print(f"Found non-empty P4/P7 in worksheet {ws.title} (P4: {p4}, P7: {p7})")
+                break
+        print(f"Found {len(empty)} empty P4/P7 worksheets.")
+        return empty

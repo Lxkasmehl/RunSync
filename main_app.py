@@ -1,335 +1,234 @@
+"""RunSync: Strava, Google Sheets und Garmin Connect abgleichen.
+
+Zwei Wege, je nachdem wo das Training dokumentiert wird:
+
+1. Klassisch, Strava ist die Quelle (Titel, Beschreibung, private Notiz, Schuhe auf Strava):
+   update_sheets_data   Strava -> Sheet, ab dem ersten leeren Tag
+   update_p4_p7         Yoga- und Workout-Anzahl pro Woche in P7/P4
+   transfer_to_garmin   Strava -> Garmin (Titel, Beschreibung, Schuhe)
+
+2. Telegram, Lukas schickt die Details an den Bot:
+   new_activity         neue Strava-Aktivitaet: Kilometer bzw. Minuten sofort ins Sheet
+   log_run              "was, welche Schuhe, Gedanken" -> Sheet (Hauptzelle, Notiz), Garmin (Beschreibung, Schuhe),
+                        Strava (Schuhe, private Notiz; nichts Oeffentliches)
+
+Aufruf lokal: python main_app.py update_sheets_data | update_p4_p7 | transfer_to_garmin [tage] | seed_ledger
+"""
+import re
+import sys
 import time
 from datetime import datetime, timedelta
 
-from garmin_client import GarminClient
+import sheets_client as sheets_ledger
+import shoes
+from garmin_client import GarminClient, GarminError
+from sheets_client import SheetsClient, activity_date
 from strava_client import StravaClient
-from sheets_client import SheetsClient
-from selenium.webdriver.support.ui import WebDriverWait
-import undetected_chromedriver as uc
 
-def get_first_not_completed_day(sheets_client):
-    """
-    Retrieves the first not completed day from the sheets client.
+RUN_TYPES = ("Run", "TrailRun", "VirtualRun")
+# Automatische Strava-Namen ("Morning Run") nicht nach Garmin uebertragen
+DEFAULT_NAME = re.compile(r"^(Morning|Afternoon|Evening|Lunch|Night) [A-Za-z ]+$")
 
-    Args:
-        sheets_client (SheetsClient): An instance of the SheetsClient class.
 
-    Returns:
-        datetime: The first not completed day.
-    """
-    # Get the first not completed day from the sheets client
-    return sheets_client.get_first_not_completed_day()
+class RunSyncError(Exception):
+    def __init__(self, error_type, message, **details):
+        super().__init__(message)
+        self.error_type = error_type
+        self.details = details
 
-def get_activities_in_timeframe(strava_client, start_date, end_date):
-    """
-    Retrieves all activities in a given timeframe from the Strava client.
 
-    Args:
-        strava_client (StravaClient): An instance of the StravaClient class.
-        start_date (datetime): The start date of the timeframe.
-        end_date (datetime): The end date of the timeframe.
+def fmt(dt):
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
 
-    Returns:
-        list: A list of activities in the given timeframe.
-    """
-    # Format the start and end dates as strings
-    start_date_str = start_date.strftime('%Y-%m-%d %H:%M:%S')
-    end_date_str = end_date.strftime('%Y-%m-%d %H:%M:%S')
 
-    # Get all activities in the given timeframe from the Strava client
-    return strava_client.get_all_activities_in_timeframe(start_date_str, end_date_str)
+def is_run(activity):
+    return activity["sport_type"] in RUN_TYPES
 
-def filter_out_yoga_activities(activities):
-    """
-    Filters out yoga activities from a list of activities.
 
-    Args:
-        activities (list): A list of activities.
+def run_info(activity):
+    start = activity_date(activity)
+    return {
+        "strava_id": activity["id"],
+        "start_local": start.isoformat(),
+        "daytime": "morning" if start.hour < 13 else "afternoon",
+        "distance_km": round(activity["distance"] / 1000, 2),
+        "moving_minutes": round(activity["moving_time"] / 60),
+    }
 
-    Returns:
-        list: A list of activities with yoga activities filtered out.
-    """
-    # Use a list comprehension to filter out yoga activities
-    return [activity for activity in activities if activity['sport_type'] != 'Yoga']
 
-def update_sheets_with_activity_details(sheets_client, strava_client, activities):
-    """
-    Updates the sheets with activity details.
+# ---------- Klassisch: Strava ist die Quelle ----------
 
-    Args:
-        sheets_client (SheetsClient): An instance of the SheetsClient class.
-        strava_client (StravaClient): An instance of the StravaClient class.
-        activities (list): A list of activities.
-    """
-    # Iterate over the activities in reverse order
-    for i, activity in enumerate(reversed(activities)):
-        # Get the Strava data for the activity
-        activity_details = strava_client.get_strava_data_for_activity_with_specific_ID(
-            activity_id=activity['id'],
-            include_efforts=False
-        )
+def update_sheets_data(sheets_client, strava_client):
+    """Alle Aktivitaeten ab dem ersten noch leeren Tag ins Sheet (ohne Yoga), aelteste zuerst."""
+    start = sheets_client.get_first_not_completed_day()
+    activities = strava_client.get_all_activities_in_timeframe(fmt(start), fmt(datetime.now()))
+    added = 0
+    for activity in reversed([a for a in activities if a["sport_type"] != "Yoga"]):
+        details = strava_client.get_activity(activity["id"])
+        added += sheets_client.set_new_entry_from_json(details)
+    return {"from": start.date().isoformat(), "found": len(activities), "added": added}
 
-        # Update the sheets with the activity details
-        sheets_client.set_new_entry_from_json(activity_details)
 
-def update_p4_p7_worksheets(sheets_client, strava_client):
-    """
-    Updates the P4 and P7 worksheets.
+def seed_ledger(sheets_client, strava_client, since="2020-01-01"):
+    """Einmalig beim Umstieg: alles vor dem ersten leeren Tag gilt als schon im Sheet."""
+    until = sheets_client.get_first_not_completed_day()
+    activities = strava_client.get_all_activities_in_timeframe(f"{since} 00:00:00", fmt(until))
+    with sheets_ledger.ledger_lock:
+        ledger = sheets_ledger.load_ledger()
+        for a in activities:
+            ledger["activities"].setdefault(str(a["id"]), {"seeded": True})
+        sheets_ledger.save_ledger(ledger)
+    return {"until": until.isoformat(), "marked": len(activities)}
 
-    Args:
-        sheets_client (SheetsClient): An instance of the SheetsClient class.
-        strava_client (StravaClient): An instance of the StravaClient class.
-    """
-    # Get the empty P4 and P7 worksheets
-    empty_p4_p7_worksheets = sheets_client.get_empty_p4_p7_worksheets()
 
-    if not empty_p4_p7_worksheets:
-        print("No worksheets to update.")
-        return
-
-    # Collect all updates to do them in batches
-    all_updates = []
-    
-    # Iterate over the worksheets
-    for ws in empty_p4_p7_worksheets:
-        try:
-            # Get the cell value of the worksheet
-            cell_value = ws.acell('B1').value
-
-            # Split the cell value into separate values
-            split_values = cell_value.split()
-
-            # Parse the start and end dates from the split values
-            start_date = datetime.strptime(split_values[3], "%d.%m.%Y")
-            end_date = datetime.strptime(split_values[5], "%d.%m.%Y")
-            
-            # Set start_date to beginning of day (00:00:00) and end_date to end of day (23:59:59)
-            # to include all activities on both days
-            start_date = start_date.replace(hour=0, minute=0, second=0)
-            end_date = end_date.replace(hour=23, minute=59, second=59)
-
-            # Check if the end date is less than or equal to the current date
-            if end_date <= datetime.now():
-                # Get all activities in the given timeframe
-                all_activities = get_activities_in_timeframe(strava_client, start_date, end_date)
-
-                # Filter out yoga activities
-                yoga_activities = [activity for activity in all_activities if activity['sport_type'] == "Yoga"]
-                yoga_count = len(yoga_activities)
-
-                # Filter out workout activities
-                workout_activities = [activity for activity in all_activities if activity['sport_type'] == "Workout"]
-                workout_count = len(workout_activities)
-
-                # Debug information
-                print(f"Worksheet {ws.title}: Date range {start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y %H:%M:%S')}")
-                print(f"Total activities found: {len(all_activities)}")
-                print(f"Yoga activities: {yoga_count}")
-                print(f"Workout activities: {workout_count}")
-                if yoga_activities:
-                    print(f"Yoga activity dates: {[activity['start_date_local'] for activity in yoga_activities]}")
-
-                # Collect updates for this worksheet
-                all_updates.append((ws, 'P7', yoga_count))
-                all_updates.append((ws, 'P4', workout_count))
-                
-                print(f"Collected updates for worksheet {ws.title}: P7={yoga_count}, P4={workout_count}")
-                
-        except Exception as e:
-            print(f"Error processing worksheet {ws.title}: {e}")
+def update_p4_p7(sheets_client, strava_client):
+    """P7 = Anzahl Yoga, P4 = Anzahl Workouts in abgeschlossenen Wochen ohne Werte."""
+    done = []
+    for ws in sheets_client.get_empty_p4_p7_worksheets() or []:
+        parts = ws.acell("B1").value.split()
+        start = datetime.strptime(parts[3], "%d.%m.%Y")
+        end = datetime.strptime(parts[5], "%d.%m.%Y").replace(hour=23, minute=59, second=59)
+        if end > datetime.now():
             continue
-    
-    # Execute all updates in batches
-    if all_updates:
-        print(f"Executing {len(all_updates)} P4/P7 updates...")
-        
-        # Group updates by worksheet to minimize API calls
-        worksheet_updates = {}
-        for ws, cell, value in all_updates:
-            if ws not in worksheet_updates:
-                worksheet_updates[ws] = []
-            worksheet_updates[ws].append((cell, value))
-        
-        # Update each worksheet with its collected updates
-        for ws, updates in worksheet_updates.items():
+        activities = strava_client.get_all_activities_in_timeframe(fmt(start), fmt(end))
+        yoga = sum(a["sport_type"] == "Yoga" for a in activities)
+        workout = sum(a["sport_type"] == "Workout" for a in activities)
+        ws.batch_update([{"range": "P7", "values": [[yoga]]}, {"range": "P4", "values": [[workout]]}])
+        done.append({"sheet": ws.title, "yoga": yoga, "workout": workout})
+        print(f"{ws.title}: P7={yoga}, P4={workout}")
+    return {"weeks": done}
+
+
+def transfer_to_garmin(strava_client, garmin_client, days=14, stop_at_transferred=True):
+    """Titel, Beschreibung und Schuhe von Strava nach Garmin, neueste zuerst.
+
+    Mit stop_at_transferred endet der Lauf bei der ersten Aktivitaet, deren Titel auf Garmin schon stimmt.
+    """
+    end = datetime.now()
+    activities = strava_client.get_all_activities_in_timeframe(fmt(end - timedelta(days=days)), fmt(end))
+    transferred, skipped = [], 0
+    for activity in activities:
+        start = activity_date(activity)
+        name = activity["name"] if not DEFAULT_NAME.match(activity["name"]) else None
+        details = strava_client.get_activity(activity["id"])
+        description = details.get("description") or None
+        shoe = shoes.by_strava_id(details.get("gear_id"))
+        gear_uuid = shoe["garmin"] if shoe else None
+        if not (name or description or gear_uuid):
+            skipped += 1
+            continue
+
+        garmin = next((g for g in garmin_client.get_activities(start.date().isoformat())
+                       if abs((datetime.fromisoformat(g["start_local"]) - start).total_seconds()) <= 60), None)
+        if garmin is None:
+            print(f"{start}: keine Garmin-Aktivitaet gefunden")
+            skipped += 1
+            continue
+        if stop_at_transferred and name and garmin["name"] == name:
+            print(f"{start}: schon uebertragen ('{name}'), Ende")
+            break
+        result = garmin_client.update_activity(start.isoformat(), name=name, description=description, gear_uuid=gear_uuid)
+        transferred.append({"start_local": start.isoformat(), "name": result["name"], "shoe": shoe["name"] if shoe else None})
+        print(f"{start}: '{result['name']}' uebertragen")
+        time.sleep(1)
+    return {"transferred": transferred, "skipped": skipped}
+
+
+# ---------- Telegram: Lukas schickt die Details ----------
+
+def new_activity(sheets_client, strava_client, activity_id):
+    """Neue Strava-Aktivitaet (Webhook): Zahl sofort ins Sheet. Bei Laeufen kommen die Texte spaeter per log_run."""
+    activity = strava_client.get_activity(activity_id)
+    info = run_info(activity) | {"sport_type": activity["sport_type"], "is_run": is_run(activity)}
+    if activity["sport_type"] == "Yoga":
+        return info | {"sheet": "skipped"}
+    added = sheets_client.set_new_entry_from_json(activity, with_run_texts=False)
+    return info | {"sheet": "added" if added else "already"}
+
+
+def find_runs(strava_client, date=None, daytime=None, strava_ids=None):
+    """Laeufe eines Tagesblocks. Alle muessen im selben Block liegen, sonst ist unklar, welche gemeint sind."""
+    if strava_ids:
+        runs = [a for a in (strava_client.get_activity(i) for i in strava_ids) if is_run(a)]
+    else:
+        if not date:
+            raise RunSyncError("bad_request", "date oder strava_ids fehlt")
+        day = datetime.strptime(date, "%Y-%m-%d")
+        # Strava filtert nach UTC, deshalb mit Puffer holen und dann nach Ortszeit filtern
+        found = strava_client.get_all_activities_in_timeframe(fmt(day - timedelta(days=1)), fmt(day + timedelta(days=2)))
+        runs = [a for a in found if is_run(a) and a["start_date_local"][:10] == date]
+        if daytime in ("morning", "afternoon"):
+            matching = [a for a in runs if run_info(a)["daytime"] == daytime]
+            if not matching:
+                raise RunSyncError("run_not_found", f"Kein Lauf am {date} ({daytime})", runs_that_day=[run_info(a) for a in runs])
+            runs = matching
+    if not runs:
+        raise RunSyncError("run_not_found", f"Kein Lauf gefunden ({date or strava_ids})")
+    runs.sort(key=lambda a: a["start_date_local"])
+    infos = [run_info(a) for a in runs]
+    if len({(i["start_local"][:10], i["daytime"]) for i in infos}) > 1:
+        raise RunSyncError("ambiguous_run", "Die Laeufe liegen in verschiedenen Tagesbloecken, bitte daytime angeben", runs_that_day=infos)
+    return runs
+
+
+def log_run(sheets_client, strava_client, garmin_client, date=None, daytime=None, strava_ids=None,
+            what=None, shoe=None, thoughts=None):
+    """Details zu den Laeufen eines Tagesblocks (Vormittag oder Nachmittag) ueberall eintragen.
+
+    Leere Felder bleiben unveraendert. Jedes Ziel wird einzeln versucht, das Ergebnis meldet, was geklappt hat.
+    """
+    what, thoughts = (what or "").strip() or None, (thoughts or "").strip() or None
+    shoe_entry = None
+    if shoe:
+        shoe_entry, options = shoes.resolve(shoe)
+        if not shoe_entry:
+            raise RunSyncError("ambiguous_shoe", f"Schuh '{shoe}' ist nicht eindeutig", options=options)
+    runs = find_runs(strava_client, date, daytime, strava_ids)
+    infos = [run_info(a) for a in runs]
+    garmin_gear = shoe_entry["garmin"] if shoe_entry else None
+    strava_gear = shoe_entry["strava"] if shoe_entry else None
+    result = {"runs": infos, "shoe": shoe_entry["name"] if shoe_entry else None, "garmin": [], "strava": [], "notes": []}
+
+    try:
+        for activity in runs:
+            sheets_client.set_new_entry_from_json(activity, with_run_texts=False)
+        result["sheet"] = {"ok": True, **sheets_client.set_run_texts(infos[0]["start_local"], what, thoughts)}
+    except Exception as e:
+        result["sheet"] = {"ok": False, "error": f"{type(e).__name__}: {e}"[:300]}
+
+    for info in infos:
+        if what or garmin_gear:
             try:
-                # Use batch_update with proper format: list of dicts with 'range' and 'values'
-                # The range should include the worksheet name and cell reference
-                batch_data = [{'range': f'{ws.title}!{cell}', 'values': [[value]]} for cell, value in updates]
-                ws.batch_update(batch_data)
-                print(f"Successfully updated worksheet {ws.title} with {len(updates)} cells")
+                garmin_client.update_activity(info["start_local"], description=what, gear_uuid=garmin_gear)
+                result["garmin"].append({"start_local": info["start_local"], "ok": True})
+            except GarminError as e:
+                result["garmin"].append({"start_local": info["start_local"], "ok": False, "error_type": e.error_type, "error": str(e)[:300]})
+
+        fields = {k: v for k, v in {"gear_id": strava_gear, "private_note": thoughts}.items() if v}
+        if fields:
+            try:
+                strava_client.update_activity(info["strava_id"], **fields)
+                result["strava"].append({"strava_id": info["strava_id"], "ok": True})
             except Exception as e:
-                print(f"Failed to batch update worksheet {ws.title}: {e}")
-                # Fallback to individual updates
-                for cell, value in updates:
-                    try:
-                        ws.update_acell(cell, value)
-                        time.sleep(0.1)  # Small delay between individual updates
-                    except Exception as fallback_e:
-                        print(f"Failed to update {cell} in {ws.title}: {fallback_e}")
+                result["strava"].append({"strava_id": info["strava_id"], "ok": False, "error": f"{type(e).__name__}: {e}"[:300]})
 
-def update_activities_since_first_not_completed_day(sheets_client, strava_client):
-    # Get the first not completed day
-    first_not_completed_day = get_first_not_completed_day(sheets_client)
+    if shoe_entry and not garmin_gear:
+        result["notes"].append(f"{shoe_entry['name']} gibt es auf Garmin nicht, dort wurde kein Schuh gesetzt.")
+    if shoe_entry and not strava_gear:
+        result["notes"].append(f"{shoe_entry['name']} gibt es auf Strava nicht, dort wurde kein Schuh gesetzt.")
+    result["ok"] = result["sheet"]["ok"] and all(r["ok"] for r in result["garmin"] + result["strava"])
+    return result
 
-    # Get the current date
-    today = datetime.now()
-
-    # Get all activities in the timeframe from the first not completed day to the current date
-    activities = get_activities_in_timeframe(strava_client, first_not_completed_day, today)
-
-    # Filter out yoga activities
-    activities = filter_out_yoga_activities(activities)
-
-    # Update the sheets with activity details
-    update_sheets_with_activity_details(sheets_client, strava_client, activities)
-
-def transfer_all_activities_not_yet_transferred_from_Strava_to_Garmin_without_stop(strava_client, garmin_client, driver, wait):
-    garmin_client.login(driver, wait)
-    garmin_client.open_activity_overview(driver, wait)
-    garmin_client.click_first_activity_in_overview(driver, wait)
-
-    all_activities = strava_client.get_all_activities_in_timeframe("2020-01-01 00:00:00",
-                                                                   datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-
-    activity_count = 0
-    while True:
-        activity_count += 1
-        print(f"\n=== Processing Activity #{activity_count} ===")
-        date = garmin_client.get_date_time_from_activity(driver, wait)
-        date_str = date.strftime("%Y-%m-%dT%H:%M:%S")
-        print(f"Activity date: {date} ({date_str})")
-
-        correspondingStravaActivityWoDetails = next((activity for activity in all_activities if datetime.strptime(activity['start_date_local'],"%Y-%m-%dT%H:%M:%SZ").replace(second=0).isoformat() == date_str), None)
-
-        if correspondingStravaActivityWoDetails is None:
-            print("No corresponding Strava activity found, skipping.")
-            garmin_client.click_previous_button(driver, wait)
-            time.sleep(5)
-            continue
-
-        if (correspondingStravaActivityWoDetails['name'] not in ['Afternoon Workout', 'Morning Workout', 'Evening Workout',
-                                                        'Lunch Workout', 'Night Workout']) and (
-                garmin_client.get_name_from_activity(driver, wait) != correspondingStravaActivityWoDetails['name']):
-
-            correspondingStravaActivity = strava_client.get_strava_data_for_activity_with_specific_ID(
-                correspondingStravaActivityWoDetails['id'], False)
-            print(correspondingStravaActivity)
-            garmin_client.edit_current_garmin_activity(driver, wait, correspondingStravaActivity)
-
-        garmin_client.click_previous_button(driver, wait)
-        time.sleep(5)  # Increased wait time between activities
-
-def transfer_activities_from_Strava_to_Garmin_until_already_transferred(strava_client, garmin_client, driver, wait):
-    """
-    Transfers activities from Strava to Garmin until it encounters the first activity that has already been transferred.
-    Stops when it finds an activity where the Garmin title already matches the Strava title (indicating it was already transferred).
-    
-    Args:
-        strava_client (StravaClient): An instance of the StravaClient class.
-        garmin_client (GarminClient): An instance of the GarminClient class.
-        driver: The Selenium WebDriver instance.
-        wait: The WebDriverWait instance.
-    """
-    try:
-        print("Step 1: Logging into Garmin...")
-        garmin_client.login(driver, wait)
-        print("✅ Garmin login successful")
-        
-        print("Step 2: Opening activity overview...")
-        garmin_client.open_activity_overview(driver, wait)
-        print("✅ Activity overview opened")
-        
-        print("Step 3: Clicking first activity...")
-        garmin_client.click_first_activity_in_overview(driver, wait)
-        print("✅ First activity clicked")
-    except Exception as e:
-        print(f"❌ Error during Garmin setup: {e}")
-        import traceback
-        traceback.print_exc()
-        raise
-
-    try:
-        print("Step 4: Fetching Strava activities...")
-        all_activities = strava_client.get_all_activities_in_timeframe("2020-01-01 00:00:00",
-                                                                       datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        print(f"✅ Fetched {len(all_activities)} Strava activities")
-    except Exception as e:
-        print(f"❌ Error fetching Strava activities: {e}")
-        import traceback
-        traceback.print_exc()
-        raise
-
-    activity_count = 0
-    while True:
-        try:
-            activity_count += 1
-            print(f"\n=== Processing Activity #{activity_count} ===")
-            
-            print(f"Getting activity date from Garmin...")
-            date = garmin_client.get_date_time_from_activity(driver, wait)
-            date_str = date.strftime("%Y-%m-%dT%H:%M:%S")
-            print(f"Processing activity from {date} ({date_str})")
-
-            correspondingStravaActivityWoDetails = next((activity for activity in all_activities if datetime.strptime(activity['start_date_local'],"%Y-%m-%dT%H:%M:%SZ").replace(second=0).isoformat() == date_str), None)
-        except Exception as e:
-            print(f"❌ Error processing activity #{activity_count}: {e}")
-            import traceback
-            traceback.print_exc()
-            break
-
-        if correspondingStravaActivityWoDetails is None:
-            print("No corresponding Strava activity found, stopping.")
-            break
-
-        garmin_activity_name = garmin_client.get_name_from_activity(driver, wait)
-        strava_activity_name = correspondingStravaActivityWoDetails['name']
-        
-        print(f"Garmin activity name: {garmin_activity_name}")
-        print(f"Strava activity name: {strava_activity_name}")
-
-        # Check if the activity has already been transferred (titles match)
-        if garmin_activity_name == strava_activity_name:
-            print(f"Activity already transferred (titles match): '{garmin_activity_name}' == '{strava_activity_name}'")
-            print("Stopping transfer process as we found an already transferred activity.")
-            break
-
-        # Skip workout activities that don't need to be transferred
-        if strava_activity_name in ['Afternoon Workout', 'Morning Workout', 'Evening Workout',
-                                   'Lunch Workout', 'Night Workout']:
-            print(f"Skipping workout activity: {strava_activity_name}")
-        else:
-            # Transfer the activity
-            print(f"Transferring activity: {strava_activity_name}")
-            correspondingStravaActivity = strava_client.get_strava_data_for_activity_with_specific_ID(
-                correspondingStravaActivityWoDetails['id'], False)
-            print(f"Strava activity data: {correspondingStravaActivity}")
-            garmin_client.edit_current_garmin_activity(driver, wait, correspondingStravaActivity)
-
-        garmin_client.click_previous_button(driver, wait)
-        time.sleep(5)  # Increased wait time between activities
-
-def main():
-    """
-    The main function of the script.
-    """
-    # Create instances of the StravaClient and SheetsClient classes
-    strava_client = StravaClient()
-    sheets_client = SheetsClient()
-    garmin_client = GarminClient()
-
-    driver = uc.Chrome(headless=False, use_subprocess=False)
-    wait = WebDriverWait(driver, 20)
-
-    # update_activities_since_first_not_completed_day(sheets_client, strava_client)
-
-    # update_p4_p7_worksheets(sheets_client, strava_client)
-
-    # Use the new function that stops when it finds an already transferred activity
-    transfer_activities_from_Strava_to_Garmin_until_already_transferred(strava_client, garmin_client, driver, wait)
-    
-    # Alternative: Use the original function that doesn't stop
-    # transfer_all_activities_not_yet_transferred_from_Strava_to_Garmin_without_stop(strava_client, garmin_client, driver, wait)
 
 if __name__ == "__main__":
-    main()
+    task = sys.argv[1] if len(sys.argv) > 1 else ""
+    if task == "update_sheets_data":
+        print(update_sheets_data(SheetsClient(), StravaClient()))
+    elif task == "update_p4_p7":
+        print(update_p4_p7(SheetsClient(), StravaClient()))
+    elif task == "seed_ledger":
+        print(seed_ledger(SheetsClient(), StravaClient()))
+    elif task == "transfer_to_garmin":
+        print(transfer_to_garmin(StravaClient(), GarminClient(), days=int(sys.argv[2]) if len(sys.argv) > 2 else 14))
+    else:
+        print(__doc__)
