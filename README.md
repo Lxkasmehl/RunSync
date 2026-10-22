@@ -13,6 +13,9 @@ n8n-Server (Repo `Lxkasmehl/n8n-server`) und wird über n8n und meinen Telegram-
   - **Garmin:** Beschreibung und Schuhe
   - **Strava:** Schuhe und private Notiz. Nichts öffentlich Sichtbares (Titel, Beschreibung) wird geändert.
 - Nachträglich geht auch: "Montagmorgen: 70 min locker in den Structures, ..."
+- Antwortest du per Zitat auf die Frage, gehört die Antwort genau zu diesem Lauf. Ohne Zitat fragt der Bot nach,
+  wenn mehrere Läufe offen sind.
+- "Welche Läufe fehlen noch?" listet die Halbtage der letzten 14 Tage, bei denen im Sheet Training oder Gedanken fehlen.
 
 **2. Klassisch:** Alles wird auf Strava gepflegt (Titel, Beschreibung, private Notiz, Schuhe), dann "Sync Strava" an
 den Bot schicken. Strava → Sheet ab dem ersten leeren Tag, Strava → Garmin (Titel, Beschreibung, Schuhe).
@@ -72,4 +75,5 @@ Achtung: Lokal ein anderes `ledger.json` als auf dem Server, also Sheet-Aufgaben
 ```
 pip install -r requirements.txt
 python main_app.py update_sheets_data | update_p4_p7 | transfer_to_garmin [tage] | seed_ledger
+python -m unittest discover tests     # Tests ohne Netz (Wochenblatt, Zellen, Schuhsuche, Texte ersetzen)
 ```
