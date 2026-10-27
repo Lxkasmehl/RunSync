@@ -34,7 +34,12 @@ Two columns per day (text, number), Sunday = B/C. Morning (start before 1 pm) ro
 Several runs in the same block (warm-up, race, cool-down) are added up and share main cell and notes.
 
 `ledger.json` records which activities are already in the sheet and which texts RunSync wrote. Nothing is counted
-twice, and a correction replaces the old text instead of appending to it.
+twice. Texts are recorded per run: a correction for the same run replaces its old text, while texts for another
+run in the same block (documented separately) are added below.
+
+Runs with breaks of at most 20 minutes in the same half day count as one training (e.g. warm-up on the treadmill,
+then outside). `/activity/new` returns `same_training` (the other runs) and `first_of_training`, so a bot can ask
+only once per training.
 
 ## Files
 

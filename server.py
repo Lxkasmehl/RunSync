@@ -3,7 +3,8 @@
 GET  /ping                      health check
 GET  /shoes                     shoe list
 POST /shoes/add     {"name": "Nike Pegasus 41 Black"}  add a shoe, or complete it on Garmin/Strava
-POST /activity/new  {"id": 123} new Strava activity: number into the sheet, returns is_run, start_local, distance_km
+POST /activity/new  {"id": 123} new Strava activity: number into the sheet, returns is_run, start_local, distance_km,
+                                for runs same_training (ids of runs with short breaks around it) and first_of_training
 POST /run/log       {"date": "2026-10-20", "daytime": "morning", "strava_ids": [...], "what": ..., "shoe": ..., "thoughts": ...}
                     or instead of thoughts: {"thoughts_from_message": true, "message": ..., "remove": ["passage", ...]}
 POST /runs/undocumented {"days": 14}   runs whose main cell or notes are still empty in the sheet

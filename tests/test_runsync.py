@@ -113,6 +113,17 @@ class RunTexts(unittest.TestCase):
         self.assertEqual(sheets.ws.cells["J4"], "70min easy")
         self.assertEqual(sheets.ws.cells["J5"], "Maurten 320.\nsecond version")
 
+    def test_two_runs_in_one_block_both_kept(self):
+        # Warm-up inside and run outside, documented one after the other: the second must not replace the first
+        sheets = FakeSheets({})
+        sheets.set_run_texts("2026-10-26T15:40:29", "Wickets", "thoughts one", "1")
+        sheets.set_run_texts("2026-10-26T15:40:29", "40min easy", "thoughts two", "2")
+        self.assertEqual(sheets.ws.cells["D7"], "Wickets\n40min easy")
+        self.assertEqual(sheets.ws.cells["D8"], "thoughts one\nthoughts two")
+        # A correction of the first run replaces only its own text
+        sheets.set_run_texts("2026-10-26T15:40:29", None, "thoughts one, fixed", "1")
+        self.assertEqual(sheets.ws.cells["D8"], "thoughts one, fixed\nthoughts two")
+
     def test_same_text_not_appended_twice(self):
         sheets = FakeSheets({"D4": "70min easy"})
         sheets.set_run_texts("2026-10-19T06:03:59", "70min easy")
@@ -206,6 +217,29 @@ class AddShoe(unittest.TestCase):
         result = self.main_app.add_shoe(FakeStrava([]), garmin, "Adidas Boston 13")
         self.assertEqual(result["garmin"], "linked to 'adidas Adizero Boston 13'")
         self.assertEqual(garmin.created, [])
+
+
+class SameTraining(unittest.TestCase):
+    """Runs with short breaks in between are one training, so the bot asks only once."""
+
+    def setUp(self):
+        import main_app
+        self.main_app = main_app
+
+    def strava(self, *runs):
+        acts = [{"id": i, "sport_type": t, "start_date_local": s, "elapsed_time": m * 60} for i, s, m, t in runs]
+        return type("Strava", (), {"get_all_activities_in_timeframe": lambda self, a, b: acts})(), acts
+
+    def test_treadmill_then_outside(self):
+        client, acts = self.strava((1, "2026-10-26T15:40:29Z", 37, "Run"), (2, "2026-10-26T16:32:11Z", 36, "Run"),
+                                   (3, "2026-10-26T06:06:07Z", 72, "Run"), (4, "2026-10-26T17:10:00Z", 20, "Yoga"))
+        self.assertEqual(self.main_app.same_training(client, acts[0]), {"same_training": [2], "first_of_training": True})
+        self.assertEqual(self.main_app.same_training(client, acts[1]), {"same_training": [1], "first_of_training": False})
+        self.assertEqual(self.main_app.same_training(client, acts[2]), {"same_training": [], "first_of_training": True})
+
+    def test_long_break_is_separate(self):
+        client, acts = self.strava((1, "2026-10-26T15:00:00Z", 30, "Run"), (2, "2026-10-26T16:00:00Z", 30, "Run"))
+        self.assertEqual(self.main_app.same_training(client, acts[1]), {"same_training": [], "first_of_training": True})
 
 
 if __name__ == "__main__":

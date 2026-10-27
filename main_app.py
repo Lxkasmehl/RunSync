@@ -27,6 +27,8 @@ from sheets_client import SheetsClient, activity_date
 from strava_client import StravaClient
 
 RUN_TYPES = ("Run", "TrailRun", "VirtualRun")
+# Runs with at most this break in between belong to one training (e.g. warm-up on the treadmill, then outside)
+SAME_TRAINING_GAP = timedelta(minutes=20)
 # Don't copy Strava's automatic names ("Morning Run") to Garmin
 DEFAULT_NAME = re.compile(r"^(Morning|Afternoon|Evening|Lunch|Night) [A-Za-z ]+$")
 
@@ -144,7 +146,32 @@ def new_activity(sheets_client, strava_client, activity_id):
     if activity["sport_type"] == "Yoga":
         return info | {"sheet": "skipped"}
     added = sheets_client.set_new_entry_from_json(activity, with_run_texts=False)
+    if info["is_run"]:
+        info |= same_training(strava_client, activity)
     return info | {"sheet": "added" if added else "already"}
+
+
+def same_training(strava_client, activity):
+    """Other runs of the same training: chained with breaks of at most SAME_TRAINING_GAP, same half day.
+
+    first_of_training is true if no run of the training started earlier, so only that one needs a question.
+    """
+    start = activity_date(activity)
+    found = strava_client.get_all_activities_in_timeframe(fmt(start - timedelta(days=1)), fmt(start + timedelta(days=1)))
+    runs = sorted([a for a in found if is_run(a) and a["id"] != activity["id"]] + [activity], key=lambda a: a["start_date_local"])
+    i = next(k for k, a in enumerate(runs) if a["id"] == activity["id"])
+    end = lambda a: activity_date(a) + timedelta(seconds=a["elapsed_time"])
+    morning = lambda a: activity_date(a).hour < 13
+    group = [runs[i]]
+    for a in reversed(runs[:i]):
+        if activity_date(group[0]) - end(a) > SAME_TRAINING_GAP or morning(a) != morning(activity):
+            break
+        group.insert(0, a)
+    for a in runs[i + 1:]:
+        if activity_date(a) - end(group[-1]) > SAME_TRAINING_GAP or morning(a) != morning(activity):
+            break
+        group.append(a)
+    return {"same_training": [a["id"] for a in group if a["id"] != activity["id"]], "first_of_training": group[0]["id"] == activity["id"]}
 
 
 def undocumented_runs(sheets_client, strava_client, days=14):
@@ -244,7 +271,8 @@ def log_run(sheets_client, strava_client, garmin_client, date=None, daytime=None
     try:
         for activity in runs:
             sheets_client.set_new_entry_from_json(activity, with_run_texts=False)
-        result["sheet"] = {"ok": True, **sheets_client.set_run_texts(infos[0]["start_local"], what, thoughts)}
+        run_key = ",".join(sorted(str(i["strava_id"]) for i in infos))
+        result["sheet"] = {"ok": True, **sheets_client.set_run_texts(infos[0]["start_local"], what, thoughts, run_key)}
     except Exception as e:
         result["sheet"] = {"ok": False, "error": f"{type(e).__name__}: {e}"[:300]}
 

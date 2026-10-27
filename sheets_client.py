@@ -225,10 +225,12 @@ class SheetsClient:
         values = self._read(self.week_worksheet(date), [cells[k] for k in keys])
         return {k: values[cells[k]] for k in keys}
 
-    def set_run_texts(self, start_local, main_text=None, notes=None):
+    def set_run_texts(self, start_local, main_text=None, notes=None, run_key=""):
         """Set main cell and notes of the run block (morning or afternoon of that day).
 
-        Text RunSync wrote before is replaced; other text stays and the new text goes below it.
+        run_key names the runs the text is about (e.g. their Strava ids). Text RunSync wrote before for the same
+        runs is replaced (a correction); text for other runs in the same block and text written by hand stays,
+        and the new text goes below it.
         """
         date = datetime.fromisoformat(start_local)
         worksheet = self.week_worksheet(date)
@@ -245,7 +247,10 @@ class SheetsClient:
             for cell, text in wanted.items():
                 key = f"{worksheet.title}!{cell}"
                 old = current[cell] or ""
-                previous = ledger["texts"].get(key)
+                # Older ledgers kept one text per cell, without the runs it belonged to
+                texts = ledger["texts"].get(key)
+                texts = texts if isinstance(texts, dict) else {"": texts} if texts else {}
+                previous = texts.get(run_key)
                 if text in old:
                     pass
                 elif previous and previous in old:
@@ -254,7 +259,8 @@ class SheetsClient:
                     updates[cell] = f"{old}\n{text}"
                 else:
                     updates[cell] = text
-                ledger["texts"][key] = text
+                texts[run_key] = text
+                ledger["texts"][key] = texts
             self._write(worksheet, updates)
             save_ledger(ledger)
         return {"sheet": worksheet.title, "cells": list(updates)}
