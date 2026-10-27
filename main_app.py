@@ -10,11 +10,14 @@ Two workflows, depending on where the training is documented:
 2. Telegram, the details are sent to the bot:
    new_activity         new Strava activity: kilometers or minutes go into the sheet right away
    log_run              "what, which shoes, thoughts" -> sheet (main cell, notes), Garmin (description, shoes),
-                        Strava (shoes, private note; nothing public)
+                        Strava (shoes, private note, description in neutral words if it is empty)
+   workout_preview      intervals: find the reps in the watch laps, show the Strava description and lactate rows
+   workout_apply        after the athlete confirmed: Strava description with splits, rows in the lactate sheet
    undocumented_runs    recent runs whose main cell or notes are still empty in the sheet
 
 Local usage: python main_app.py update_sheets_data | update_p4_p7 | transfer_to_garmin [days] | seed_ledger
 """
+import json
 import re
 import sys
 import time
@@ -22,9 +25,11 @@ from datetime import datetime, timedelta
 
 import sheets_client as sheets_ledger
 import shoes
+import workout as workouts
 from garmin_client import GarminClient, GarminError
 from sheets_client import SheetsClient, activity_date
 from strava_client import StravaClient
+from lactate_client import LactateClient
 
 RUN_TYPES = ("Run", "TrailRun", "VirtualRun")
 # Runs with at most this break in between belong to one training (e.g. warm-up on the treadmill, then outside)
@@ -243,11 +248,44 @@ def remove_passages(message, passages):
     return text, missing
 
 
+def set_strava_description(strava_client, activity_id, text):
+    """Strava description, but only if it is empty or still the text RunSync wrote: the athlete's own text stays."""
+    text = (text or "").strip()
+    norm = lambda t: " ".join((t or "").split())
+    current = strava_client.get_activity(activity_id).get("description") or ""
+    key = str(activity_id)
+    with sheets_ledger.ledger_lock:
+        previous = sheets_ledger.load_ledger().get("strava_descriptions", {}).get(key)
+    if norm(current) == norm(text):
+        status = "unchanged"
+    elif norm(current) and norm(current) != norm(previous):
+        return "kept_own"
+    else:
+        strava_client.update_activity(activity_id, description=text)
+        status = "set"
+    with sheets_ledger.ledger_lock:
+        ledger = sheets_ledger.load_ledger()
+        ledger.setdefault("strava_descriptions", {})[key] = text
+        sheets_ledger.save_ledger(ledger)
+    return status
+
+
+def strava_description_is_own(activity):
+    """True if the Strava description was written by the athlete (not empty and not from RunSync)."""
+    current = " ".join((activity.get("description") or "").split())
+    with sheets_ledger.ledger_lock:
+        previous = sheets_ledger.load_ledger().get("strava_descriptions", {}).get(str(activity["id"]))
+    return bool(current) and current != " ".join((previous or "").split())
+
+
 def log_run(sheets_client, strava_client, garmin_client, date=None, daytime=None, strava_ids=None,
-            what=None, shoe=None, thoughts=None, message=None, remove=None, thoughts_from_message=False):
+            what=None, shoe=None, thoughts=None, message=None, remove=None, thoughts_from_message=False,
+            what_neutral=None, has_workout=False):
     """Write the details of the runs of one half day (morning or afternoon) everywhere.
 
     thoughts_from_message: the thoughts are the whole message minus the passages in remove.
+    what_neutral: the training in language-neutral words ("70 min easy") for the Strava description. For a workout
+    (has_workout) the description waits for workout_apply, which adds the splits.
     Empty fields stay unchanged. Each target is tried on its own; the result says what worked.
     If the shoe is unknown or ambiguous, everything else is still saved and shoe_problem says why.
     """
@@ -285,12 +323,17 @@ def log_run(sheets_client, strava_client, garmin_client, date=None, daytime=None
                 result["garmin"].append({"start_local": info["start_local"], "ok": False, "error_type": e.error_type, "error": str(e)[:300]})
 
         fields = {k: v for k, v in {"gear_id": strava_gear, "private_note": thoughts}.items() if v}
-        if fields:
+        describe = bool((what_neutral or "").strip()) and not has_workout
+        if fields or describe:
+            entry = {"strava_id": info["strava_id"], "ok": True}
             try:
-                strava_client.update_activity(info["strava_id"], **fields)
-                result["strava"].append({"strava_id": info["strava_id"], "ok": True})
+                if fields:
+                    strava_client.update_activity(info["strava_id"], **fields)
+                if describe:
+                    entry["description"] = set_strava_description(strava_client, info["strava_id"], what_neutral)
             except Exception as e:
-                result["strava"].append({"strava_id": info["strava_id"], "ok": False, "error": f"{type(e).__name__}: {e}"[:300]})
+                entry |= {"ok": False, "error": f"{type(e).__name__}: {e}"[:300]}
+            result["strava"].append(entry)
 
     if shoe_entry and not garmin_gear:
         result["notes"].append(f"{shoe_entry['name']} does not exist on Garmin, no shoe was set there. add_shoe can add it.")
@@ -301,6 +344,64 @@ def log_run(sheets_client, strava_client, garmin_client, date=None, daytime=None
         result["action_needed"] = ("Everything except the shoe was saved. Ask the user which shoe it was"
                                    + (f" ({' or '.join(result['shoe_problem']['options'])})" if result["shoe_problem"].get("options") else "")
                                    + ", then call log_run for the same run with only the shoe.")
+    return result
+
+
+def workout_context(strava_client, garmin_client, strava_ids, workout, what_neutral):
+    """Everything for preview and apply: the checked workout, laps of all runs, matched reps, description, lactate rows."""
+    try:
+        w = workouts.normalize(json.loads(workout) if isinstance(workout, str) else workout)
+    except ValueError as e:
+        raise RunSyncError("bad_request", f"workout: {e}")
+    runs = find_runs(strava_client, strava_ids=strava_ids)
+    laps, activities = [], []
+    for activity in runs:
+        info = run_info(activity)
+        found = garmin_client.get_laps(info["start_local"])
+        activities.append(info | {"garmin_type": found.get("type"), "weather": found.get("weather"), "strava": activity})
+        laps += [lap | {"activity": len(activities) - 1} for lap in found["laps"]]
+    match = None if w["no_splits"] else workouts.match_laps(laps, w["segments"])
+    usable = w["no_splits"] or match["ok"]
+    main = activities[match["reps"][0]["activity"]] if match and match["ok"] else activities[0]
+    # Shoe: what log_run set on Strava, without the brand as the athlete writes it ("Vaporfly 4")
+    shoe = shoes.by_strava_id(main["strava"].get("gear_id"))
+    rows = workouts.lactate_rows(w, match, {
+        "date": main["start_local"][:10], "session": "AM" if main["daytime"] == "morning" else "PM",
+        "shoes": shoe["name"].split(" ", 1)[-1] if shoe else None, "weather": main["weather"],
+        "garmin_type": main["garmin_type"], "strava_id": main["strava_id"],
+    }) if usable else []
+    return {"workout": w, "laps": laps, "match": match, "usable": usable, "main": main, "activities": activities,
+            "rows": rows, "description": workouts.description(what_neutral, w["segments"], match, w["lactate"])}
+
+
+def workout_preview(strava_client, garmin_client, strava_ids, workout, what_neutral):
+    """Shows what workout_apply would write; writes nothing."""
+    ctx = workout_context(strava_client, garmin_client, strava_ids, workout, what_neutral)
+    return workouts.preview(ctx["workout"], ctx["match"], ctx["laps"], ctx["description"], ctx["rows"]) | {
+        "strava_description_own": strava_description_is_own(ctx["main"]["strava"])}
+
+
+def workout_apply(strava_client, garmin_client, strava_ids, workout, what_neutral):
+    """After the athlete confirmed the preview: Strava description with splits on the run with the reps (other runs of
+    the training get the title), lactate rows into the lactate sheet (replacing earlier rows of this run)."""
+    ctx = workout_context(strava_client, garmin_client, strava_ids, workout, what_neutral)
+    if not ctx["usable"]:
+        raise RunSyncError("workout_not_matched", f"The reps were not found in the laps ({ctx['match']['reason']})")
+    result = {"strava": [], "description": ctx["description"]}
+    for activity in ctx["activities"]:
+        text = ctx["description"] if activity is ctx["main"] else what_neutral
+        if not (text or "").strip():
+            continue
+        try:
+            result["strava"].append({"strava_id": activity["strava_id"], "ok": True,
+                                     "description": set_strava_description(strava_client, activity["strava_id"], text)})
+        except Exception as e:
+            result["strava"].append({"strava_id": activity["strava_id"], "ok": False, "error": f"{type(e).__name__}: {e}"[:300]})
+    try:
+        result["lactate_sheet"] = {"ok": True, **LactateClient().write_rows(ctx["main"]["strava_id"], ctx["rows"])}
+    except Exception as e:
+        result["lactate_sheet"] = {"ok": False, "error": f"{type(e).__name__}: {e}"[:300]}
+    result["ok"] = result["lactate_sheet"]["ok"] and all(r["ok"] for r in result["strava"])
     return result
 
 

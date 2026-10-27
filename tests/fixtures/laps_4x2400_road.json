@@ -1,0 +1,80 @@
+{
+"type": "running",
+"laps": [
+{
+"distance_m": 3308.4,
+"duration_s": 973.0,
+"elapsed_s": 1575.9
+},
+{
+"distance_m": 296.8,
+"duration_s": 60.7,
+"elapsed_s": 60.7
+},
+{
+"distance_m": 50.9,
+"duration_s": 85.0,
+"elapsed_s": 85.0
+},
+{
+"distance_m": 304.7,
+"duration_s": 60.6,
+"elapsed_s": 60.6
+},
+{
+"distance_m": 17.8,
+"duration_s": 8.6,
+"elapsed_s": 704.2
+},
+{
+"distance_m": 2254.3,
+"duration_s": 480.6,
+"elapsed_s": 480.6
+},
+{
+"distance_m": 350.9,
+"duration_s": 89.9,
+"elapsed_s": 89.9
+},
+{
+"distance_m": 2444.5,
+"duration_s": 521.7,
+"elapsed_s": 521.7
+},
+{
+"distance_m": 98.5,
+"duration_s": 90.8,
+"elapsed_s": 90.8
+},
+{
+"distance_m": 2206.5,
+"duration_s": 480.2,
+"elapsed_s": 480.2
+},
+{
+"distance_m": 352.7,
+"duration_s": 90.5,
+"elapsed_s": 90.5
+},
+{
+"distance_m": 2397.3,
+"duration_s": 521.0,
+"elapsed_s": 521.0
+},
+{
+"distance_m": 8.3,
+"duration_s": 60.8,
+"elapsed_s": 60.8
+},
+{
+"distance_m": 365.1,
+"duration_s": 91.9,
+"elapsed_s": 91.9
+},
+{
+"distance_m": 3231.1,
+"duration_s": 864.0,
+"elapsed_s": 1245.3
+}
+]
+}

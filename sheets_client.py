@@ -27,7 +27,8 @@ LEDGER_FILE = os.path.join(os.getenv("DATA_DIR", "."), "ledger.json")
 ledger_lock = threading.Lock()
 
 
-def open_spreadsheet():
+def open_spreadsheet(key=None):
+    """The training diary (DOCUMENT_NAME), or another spreadsheet by its id."""
     file_path = os.getenv("FILE_PATH")
     if file_path and os.path.exists(file_path):
         sa = gspread.service_account(filename=file_path)
@@ -35,7 +36,7 @@ def open_spreadsheet():
         sa = gspread.service_account_from_dict(json.loads(os.getenv("SERVICE_ACCOUNT_JSON")))
     else:
         raise ValueError("Either FILE_PATH (file path) or SERVICE_ACCOUNT_JSON (JSON content) must be provided")
-    return sa.open(os.getenv("DOCUMENT_NAME"))
+    return sa.open_by_key(key) if key else sa.open(os.getenv("DOCUMENT_NAME"))
 
 
 def parse_number(value):
@@ -49,7 +50,7 @@ def load_ledger():
     if os.path.exists(LEDGER_FILE):
         with open(LEDGER_FILE, encoding="utf-8") as f:
             return json.load(f)
-    return {"activities": {}, "texts": {}}
+    return {"activities": {}, "texts": {}, "strava_descriptions": {}}
 
 
 def save_ledger(ledger):

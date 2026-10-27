@@ -12,8 +12,9 @@ API = "https://www.strava.com/api/v3"
 TOKEN_URL = "https://www.strava.com/api/v3/oauth/token"
 SCOPES = "read,activity:read_all,activity:write,profile:read_all"
 
-# RunSync only changes things on Strava that nobody but the athlete can see
-WRITABLE_FIELDS = {"gear_id", "private_note"}
+# RunSync changes shoes and the private note, and the description only where it is empty or written by RunSync
+# (checked in main_app.set_strava_description). Never the title.
+WRITABLE_FIELDS = {"gear_id", "private_note", "description"}
 
 
 class StravaClient:
@@ -76,13 +77,14 @@ class StravaClient:
         return sorted(activities, key=lambda a: a["start_date"], reverse=True)
 
     def update_activity(self, activity_id, **fields):
-        """Only sets shoes (gear_id) and the private note (private_note), never publicly visible fields."""
+        """Only sets shoes (gear_id), the private note (private_note) and the description, never the title."""
         forbidden = set(fields) - WRITABLE_FIELDS
         if forbidden:
             raise ValueError(f"RunSync may only change {sorted(WRITABLE_FIELDS)} on Strava, not {sorted(forbidden)}")
         updated = self.request("PUT", f"/activities/{activity_id}", json=fields)
+        same = lambda a, b: " ".join(str(a or "").split()) == " ".join(str(b or "").split())
         for key, value in fields.items():
-            if (updated.get(key) or "") != (value or ""):
+            if not same(updated.get(key), value):
                 raise RuntimeError(f"Strava did not accept {key} (it is {updated.get(key)!r})")
         return updated
 

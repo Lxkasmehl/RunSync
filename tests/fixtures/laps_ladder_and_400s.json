@@ -1,0 +1,160 @@
+{
+"type": "running",
+"laps": [
+{
+"distance_m": 4227.6,
+"duration_s": 1233.2,
+"elapsed_s": 2035.9
+},
+{
+"distance_m": 311.4,
+"duration_s": 61.9,
+"elapsed_s": 61.9
+},
+{
+"distance_m": 45.7,
+"duration_s": 23.8,
+"elapsed_s": 156.2
+},
+{
+"distance_m": 176.3,
+"duration_s": 31.0,
+"elapsed_s": 31.0
+},
+{
+"distance_m": 83.7,
+"duration_s": 34.6,
+"elapsed_s": 704.1
+},
+{
+"distance_m": 1589.8,
+"duration_s": 283.8,
+"elapsed_s": 283.8
+},
+{
+"distance_m": 107.9,
+"duration_s": 60.1,
+"elapsed_s": 60.1
+},
+{
+"distance_m": 2065.6,
+"duration_s": 398.1,
+"elapsed_s": 398.1
+},
+{
+"distance_m": 175.8,
+"duration_s": 59.6,
+"elapsed_s": 59.6
+},
+{
+"distance_m": 1211.7,
+"duration_s": 208.3,
+"elapsed_s": 208.3
+},
+{
+"distance_m": 98.7,
+"duration_s": 59.9,
+"elapsed_s": 59.9
+},
+{
+"distance_m": 2054.3,
+"duration_s": 406.5,
+"elapsed_s": 406.5
+},
+{
+"distance_m": 158.5,
+"duration_s": 59.8,
+"elapsed_s": 59.8
+},
+{
+"distance_m": 809.7,
+"duration_s": 135.8,
+"elapsed_s": 135.8
+},
+{
+"distance_m": 92.7,
+"duration_s": 59.9,
+"elapsed_s": 59.9
+},
+{
+"distance_m": 2067.4,
+"duration_s": 390.8,
+"elapsed_s": 390.8
+},
+{
+"distance_m": 38.1,
+"duration_s": 58.8,
+"elapsed_s": 58.8
+},
+{
+"distance_m": 611.7,
+"duration_s": 96.5,
+"elapsed_s": 96.5
+},
+{
+"distance_m": 20.5,
+"duration_s": 7.4,
+"elapsed_s": 532.9
+},
+{
+"distance_m": 404.8,
+"duration_s": 84.4,
+"elapsed_s": 84.4
+},
+{
+"distance_m": 23.8,
+"duration_s": 33.5,
+"elapsed_s": 33.5
+},
+{
+"distance_m": 406.4,
+"duration_s": 80.3,
+"elapsed_s": 80.3
+},
+{
+"distance_m": 21.1,
+"duration_s": 29.3,
+"elapsed_s": 29.3
+},
+{
+"distance_m": 407.7,
+"duration_s": 80.5,
+"elapsed_s": 80.5
+},
+{
+"distance_m": 24.4,
+"duration_s": 30.2,
+"elapsed_s": 30.2
+},
+{
+"distance_m": 402.4,
+"duration_s": 81.2,
+"elapsed_s": 81.2
+},
+{
+"distance_m": 25.1,
+"duration_s": 29.0,
+"elapsed_s": 29.0
+},
+{
+"distance_m": 404.9,
+"duration_s": 80.6,
+"elapsed_s": 80.6
+},
+{
+"distance_m": 22.4,
+"duration_s": 31.9,
+"elapsed_s": 31.9
+},
+{
+"distance_m": 405.2,
+"duration_s": 80.5,
+"elapsed_s": 80.5
+},
+{
+"distance_m": 2054.5,
+"duration_s": 601.9,
+"elapsed_s": 724.6
+}
+]
+}

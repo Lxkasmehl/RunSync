@@ -49,3 +49,7 @@ class GarminClient:
         """Finds the activity by its start time (local time, same as on Strava) and sets the given fields."""
         body = {"start_local": start_local, "name": name, "description": description, "gear_uuid": gear_uuid}
         return self.request("POST", "/activity", json={k: v for k, v in body.items() if v is not None})
+
+    def get_laps(self, start_local):
+        """Laps (lap button), weather and activity type of the activity that starts at start_local."""
+        return self.request("GET", "/activity/laps", params={"start_local": start_local})

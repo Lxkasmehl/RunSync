@@ -1,0 +1,90 @@
+{
+"type": "running",
+"laps": [
+{
+"distance_m": 3327.1,
+"duration_s": 986.0,
+"elapsed_s": 1869.6
+},
+{
+"distance_m": 304.8,
+"duration_s": 60.3,
+"elapsed_s": 60.3
+},
+{
+"distance_m": 91.0,
+"duration_s": 61.8,
+"elapsed_s": 61.8
+},
+{
+"distance_m": 306.3,
+"duration_s": 59.7,
+"elapsed_s": 59.7
+},
+{
+"distance_m": 7.1,
+"duration_s": 2.8,
+"elapsed_s": 431.8
+},
+{
+"distance_m": 1673.0,
+"duration_s": 340.3,
+"elapsed_s": 340.3
+},
+{
+"distance_m": 97.3,
+"duration_s": 59.7,
+"elapsed_s": 59.7
+},
+{
+"distance_m": 1676.0,
+"duration_s": 338.1,
+"elapsed_s": 338.1
+},
+{
+"distance_m": 104.4,
+"duration_s": 59.7,
+"elapsed_s": 59.7
+},
+{
+"distance_m": 1656.7,
+"duration_s": 341.0,
+"elapsed_s": 341.0
+},
+{
+"distance_m": 98.7,
+"duration_s": 59.5,
+"elapsed_s": 59.5
+},
+{
+"distance_m": 1652.9,
+"duration_s": 345.5,
+"elapsed_s": 345.5
+},
+{
+"distance_m": 94.5,
+"duration_s": 60.4,
+"elapsed_s": 60.4
+},
+{
+"distance_m": 1654.4,
+"duration_s": 343.9,
+"elapsed_s": 343.9
+},
+{
+"distance_m": 99.4,
+"duration_s": 57.5,
+"elapsed_s": 57.5
+},
+{
+"distance_m": 1656.2,
+"duration_s": 345.3,
+"elapsed_s": 345.3
+},
+{
+"distance_m": 3334.1,
+"duration_s": 902.6,
+"elapsed_s": 1421.4
+}
+]
+}

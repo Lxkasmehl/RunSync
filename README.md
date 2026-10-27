@@ -11,12 +11,23 @@ my self-hosted n8n and is driven by n8n workflows and a Telegram bot.
 - The answer (text or voice message) is written to:
   - **Sheet:** main cell ("70min easy") and notes (thoughts, word for word)
   - **Garmin:** description and shoes
-  - **Strava:** shoes and private note only. Nothing publicly visible (title, description) is changed.
+  - **Strava:** shoes, private note and the description in language-neutral words ("70 min easy",
+    "20×400 /30\""), but only if the description is empty or was written by RunSync. The title is never changed.
 - Works for older runs too: "Monday morning: 70 min easy in the Structures, ..."
 - Replying to the bot's question (Telegram quote) ties the answer to exactly that run. Without a quote the bot asks
   when several runs are waiting.
 - "Which runs are still missing?" lists the half days of the last 14 days whose description or thoughts are empty
   in the sheet.
+
+**Workouts** (intervals, lactate): the bot also extracts the structure ("20×400 /30\"", lactate 3.1 after rep 7).
+RunSync finds the reps in the Garmin laps (lap button: one lap per rep and per rest; warm-up, strides and cool-down
+are skipped), and the bot sends a preview. The athlete's distances win (indoors the watch may measure 330 m for a
+400), only times come from the watch. After "passt":
+- **Strava description:** title plus splits. Up to 15 reps every time, above that the average per block between
+  lactate tests (`1-7: Ø 68.4 → 3.1 mmol`). Times under 1:30 as seconds, single reps of a ladder on one line.
+- **Lactate sheet** (worksheet `RawData`, one row per test): date, session, rep distance and time, surface, rest,
+  heart rate, weather (outdoors), shoe, and the pace of all reps before the test (`Prev Avg/Fastest/Slowest Pace`).
+  Rows carry the `Strava ID`, so a correction replaces them.
 
 **2. Classic:** everything is maintained on Strava (title, description, private note, shoes), then "Sync Strava" to
 the bot. Strava → sheet from the first empty day, Strava → Garmin (title, description, shoes).
@@ -47,7 +58,9 @@ only once per training.
 |---|---|
 | `main_app.py` | Both workflows, also usable from the command line |
 | `server.py` | HTTP service for n8n (`http://runsync:8001`, Docker network only) |
-| `strava_client.py` | Strava API; only writes `gear_id` and `private_note` |
+| `strava_client.py` | Strava API; only writes `gear_id`, `private_note` and `description` (never the title) |
+| `workout.py` | Workouts: reps ↔ laps, Strava description, lactate rows, preview text |
+| `lactate_client.py` | Lactate sheet (`LACTATE_SHEET_ID`), finds columns by header |
 | `garmin_client.py` | Garmin via a small Garmin service ([python-garminconnect](https://github.com/cyberjunky/python-garminconnect), no web scraping) |
 | `sheets_client.py` | Google Sheet (gspread, service account) |
 | `shoes.json`, `shoes.py` | Shoe mapping Garmin ↔ Strava and lookup by description ("Invincible 3 blau") |

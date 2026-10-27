@@ -7,13 +7,16 @@ POST /activity/new  {"id": 123} new Strava activity: number into the sheet, retu
                                 for runs same_training (ids of runs with short breaks around it) and first_of_training
 POST /run/log       {"date": "2026-10-20", "daytime": "morning", "strava_ids": [...], "what": ..., "shoe": ..., "thoughts": ...}
                     or instead of thoughts: {"thoughts_from_message": true, "message": ..., "remove": ["passage", ...]}
+                    optional "what_neutral": "70 min easy" (Strava description), "has_workout": true (description later)
+POST /workout/preview {"strava_ids": [...], "workout": {...}, "what_neutral": "20x400 /30"}   what apply would write
+POST /workout/apply   same body: Strava description with splits, lactate sheet rows (workout format: workout.py)
 POST /runs/undocumented {"days": 14}   runs whose main cell or notes are still empty in the sheet
 POST /classic/sheets            Strava -> sheet, starting at the first empty day
 POST /classic/garmin {"days": 14, "stop_at_transferred": true}   Strava -> Garmin
 POST /classic/p4p7              yoga/workout counts of finished weeks
 
 Errors: {"ok": false, "error_type": ..., "message": ..., ...}
-  run_not_found / ambiguous_run (runs_that_day), bad_request, garmin_*, strava_error, unexpected
+  run_not_found / ambiguous_run (runs_that_day), bad_request, workout_not_matched, garmin_*, strava_error, unexpected
 /run/log saves everything else when the shoe is unknown or ambiguous and reports it in shoe_problem.
 """
 import json
@@ -51,7 +54,12 @@ def run_log(body):
     return main_app.log_run(sheets(), strava, garmin, date=body.get("date") or None, daytime=body.get("daytime") or None,
                             strava_ids=body.get("strava_ids") or None, what=body.get("what"), shoe=body.get("shoe"),
                             thoughts=body.get("thoughts"), message=body.get("message"), remove=body.get("remove"),
-                            thoughts_from_message=body.get("thoughts_from_message") in (True, "true"))
+                            thoughts_from_message=body.get("thoughts_from_message") in (True, "true"),
+                            what_neutral=body.get("what_neutral"), has_workout=body.get("has_workout") in (True, "true"))
+
+
+def workout_route(fn):
+    return lambda body: fn(strava, garmin, body.get("strava_ids") or None, body.get("workout"), body.get("what_neutral"))
 
 
 ROUTES = {
@@ -60,6 +68,8 @@ ROUTES = {
     ("POST", "/shoes/add"): lambda body: main_app.add_shoe(strava, garmin, str(body.get("name") or "")),
     ("POST", "/activity/new"): lambda body: main_app.new_activity(sheets(), strava, body["id"]),
     ("POST", "/run/log"): run_log,
+    ("POST", "/workout/preview"): workout_route(main_app.workout_preview),
+    ("POST", "/workout/apply"): workout_route(main_app.workout_apply),
     ("POST", "/runs/undocumented"): lambda body: main_app.undocumented_runs(sheets(), strava, days=int(body.get("days") or 14)),
     ("POST", "/classic/sheets"): lambda body: main_app.update_sheets_data(sheets(), strava),
     ("POST", "/classic/garmin"): lambda body: main_app.transfer_to_garmin(
