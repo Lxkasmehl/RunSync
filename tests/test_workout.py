@@ -155,6 +155,13 @@ class LactateRows(unittest.TestCase):
         row = W.lactate_rows(w, m, self.INFO | {"weather": {}, "garmin_type": data["type"]})[0]
         self.assertEqual((row["surface"], row["incline"]), ("Treadmill", 0))
 
+    def test_shoe_model(self):
+        for name, model in [("Adidas Adizero Takumi Sen 10", "Takumi Sen 10"), ("Nike Vaporfly 2 White Silver", "Vaporfly 2"),
+                            ("Nike Invincible 3 Blue (DE)", "Invincible 3"), ("On Cloudboom Echo 3", "Cloudboom Echo 3"),
+                            ("Nike Structure 25 Bowerman", "Structure 25"), ("Nike Dragonfly 2 Elite", "Dragonfly 2 Elite"),
+                            ("Nike Pegasus 36 Shield", "Pegasus 36 Shield"), ("Takumi Sen 10", "Takumi Sen 10")]:
+            self.assertEqual(W.shoe_model(name), model)
+
     def test_sheet_units(self):
         # Like the athlete types them: 5:36 rep time, pace 3:29 shown as h:mm
         self.assertEqual(lactate_client.cell_value("rep_time_s", 336), 336 / 86400)

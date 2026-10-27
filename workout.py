@@ -307,6 +307,24 @@ def description(title, segments, match, lactate):
 
 # ---------- Lactate sheet ----------
 
+BRANDS = {"nike", "adidas", "on", "saucony", "hoka", "asics", "brooks", "new", "balance", "puma", "adizero"}
+COLOR_WORDS = {"white", "black", "blue", "red", "grey", "gray", "green", "light", "silver", "volt", "pink", "orange",
+               "yellow", "bowerman"}
+
+
+def shoe_model(name):
+    """Only the model counts in the lactate sheet: "Adidas Adizero Takumi Sen 10" -> "Takumi Sen 10",
+    "Nike Vaporfly 2 White Silver" -> "Vaporfly 2", "Nike Invincible 3 Blue (DE)" -> "Invincible 3"."""
+    if not name:
+        return name
+    words = [w for w in name.split() if not w.startswith("(")]
+    while len(words) > 1 and words[0].lower() in BRANDS:
+        words.pop(0)
+    while len(words) > 1 and words[-1].lower() in COLOR_WORDS:
+        words.pop()
+    return " ".join(words)
+
+
 def lactate_rows(workout, match, info):
     """One row per lactate test. info: date, session (AM/PM), shoes, weather, garmin_type, strava_id."""
     segments, reps = workout["segments"], (match or {}).get("reps") if (match or {}).get("ok") else None

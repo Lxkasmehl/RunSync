@@ -124,7 +124,7 @@ def main(since=None, apply=False, with_paces=False):
         result = match_session(laps, rows) if laps and all(number(r["rep_no"]) for r in rows) else None
         main_run = owners[result[0]["reps"][0]["lap"]] if result else max(session_runs, key=lambda a: a["moving_time"])
         shoe = shoes.by_strava_id(main_run.get("gear_id"))
-        shoe_name = shoe["name"].split(" ", 1)[-1] if shoe else None
+        shoe_name = workouts.shoe_model(shoe["name"]) if shoe else None
         humidity = (weather.get(main_run["id"]) or {}).get("humidity_pct")
 
         filled = defaultdict(int)

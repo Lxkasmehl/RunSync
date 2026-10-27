@@ -363,11 +363,11 @@ def workout_context(strava_client, garmin_client, strava_ids, workout, what_neut
     match = None if w["no_splits"] else workouts.match_laps(laps, w["segments"])
     usable = w["no_splits"] or match["ok"]
     main = activities[match["reps"][0]["activity"]] if match and match["ok"] else activities[0]
-    # Shoe: what log_run set on Strava, without the brand as the athlete writes it ("Vaporfly 4")
+    # Shoe: what log_run set on Strava, only the model as the athlete writes it ("Vaporfly 4")
     shoe = shoes.by_strava_id(main["strava"].get("gear_id"))
     rows = workouts.lactate_rows(w, match, {
         "date": main["start_local"][:10], "session": "AM" if main["daytime"] == "morning" else "PM",
-        "shoes": shoe["name"].split(" ", 1)[-1] if shoe else None, "weather": main["weather"],
+        "shoes": workouts.shoe_model(shoe["name"]) if shoe else None, "weather": main["weather"],
         "garmin_type": main["garmin_type"], "strava_id": main["strava_id"],
     }) if usable else []
     return {"workout": w, "laps": laps, "match": match, "usable": usable, "main": main, "activities": activities,
