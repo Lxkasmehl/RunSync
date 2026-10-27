@@ -237,7 +237,8 @@ def label(seg, with_reps=False):
         text = f"{d / 1000:g} km" if d >= 5000 and d % 1000 == 0 else f"{d:g}"
     else:
         s = round(seg["duration_s"])
-        text = f'{s}"' if s < 60 else f"{s // 60}'" if s % 60 == 0 else f"{s // 60}:{s % 60:02d}"
+        # s and min instead of " and ': language neutral, and quotes trip up the language model's tool calls
+        text = f"{s}s" if s < 60 else f"{s // 60}min" if s % 60 == 0 else f"{s // 60}:{s % 60:02d}"
     return f"{seg['reps']}×{text}" if with_reps and seg["reps"] > 1 else text
 
 

@@ -8,7 +8,7 @@ POST /activity/new  {"id": 123} new Strava activity: number into the sheet, retu
 POST /run/log       {"date": "2026-10-20", "daytime": "morning", "strava_ids": [...], "what": ..., "shoe": ..., "thoughts": ...}
                     or instead of thoughts: {"thoughts_from_message": true, "message": ..., "remove": ["passage", ...]}
                     optional "what_neutral": "70 min easy" (Strava description), "has_workout": true (description later)
-POST /workout/preview {"strava_ids": [...], "workout": {...}, "what_neutral": "20x400 /30"}   what apply would write
+POST /workout/preview {"strava_ids": [...], "workout": {...}, "what_neutral": "20×400 /30s"}   what apply would write
 POST /workout/apply   same body: Strava description with splits, lactate sheet rows (workout format: workout.py)
 POST /runs/undocumented {"days": 14}   runs whose main cell or notes are still empty in the sheet
 POST /classic/sheets            Strava -> sheet, starting at the first empty day

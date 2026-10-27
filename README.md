@@ -12,14 +12,14 @@ my self-hosted n8n and is driven by n8n workflows and a Telegram bot.
   - **Sheet:** main cell ("70min easy") and notes (thoughts, word for word)
   - **Garmin:** description and shoes
   - **Strava:** shoes, private note and the description in language-neutral words ("70 min easy",
-    "20×400 /30\""), but only if the description is empty or was written by RunSync. The title is never changed.
+    "20×400 /30s"), but only if the description is empty or was written by RunSync. The title is never changed.
 - Works for older runs too: "Monday morning: 70 min easy in the Structures, ..."
 - Replying to the bot's question (Telegram quote) ties the answer to exactly that run. Without a quote the bot asks
   when several runs are waiting.
 - "Which runs are still missing?" lists the half days of the last 14 days whose description or thoughts are empty
   in the sheet.
 
-**Workouts** (intervals, lactate): the bot also extracts the structure ("20×400 /30\"", lactate 3.1 after rep 7).
+**Workouts** (intervals, lactate): the bot also extracts the structure ("20×400 /30s", lactate 3.1 after rep 7).
 RunSync finds the reps in the Garmin laps (lap button: one lap per rep and per rest; warm-up, strides and cool-down
 are skipped), and the bot sends a preview. The athlete's distances win (indoors the watch may measure 330 m for a
 400), only times come from the watch. After "passt":

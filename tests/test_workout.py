@@ -50,7 +50,7 @@ class Matching(unittest.TestCase):
         self.assertEqual(m["reps"][0]["distance_m"], 899)
 
     def test_mixed_workout(self):
-        # 1600, 2000, 1200, 2000, 800, 2000, 600 with 1' rest, after a break 6x400 /30"
+        # 1600, 2000, 1200, 2000, 800, 2000, 600 with 1 min rest, after a break 6x400 /30s
         singles = [{"reps": 1, "distance_m": d, "rest_s": 60} for d in (1600, 2000, 1200, 2000, 800, 2000, 600)]
         w, m, _ = run("laps_ladder_and_400s.json", {"segments": singles + [{"reps": 6, "distance_m": 400, "rest_s": 30}]})
         self.assertTrue(m["ok"])
@@ -88,14 +88,14 @@ class Texts(unittest.TestCase):
     def test_every_rep_up_to_15(self):
         w, m, _ = run("laps_6x1mile_track.json", {"segments": [{"reps": 6, "distance_m": 1609, "rest_s": 60}],
                                                   "lactate": [{"after_rep": 3, "mmol": 2.5}, {"after_rep": 6, "mmol": 1.6}]})
-        self.assertEqual(W.description("6×1 mi /1'", w["segments"], m, w["lactate"]),
-                         "6×1 mi /1'\n5:40, 5:38, 5:41 (2.5 mmol), 5:46, 5:44, 5:45 (1.6 mmol)")
+        self.assertEqual(W.description("6×1 mi /1min", w["segments"], m, w["lactate"]),
+                         "6×1 mi /1min\n5:40, 5:38, 5:41 (2.5 mmol), 5:46, 5:44, 5:45 (1.6 mmol)")
 
     def test_blocks_above_15(self):
         w, m, _ = run("laps_20x400_indoor.json", {"segments": [{"reps": 20, "distance_m": 400, "rest_s": 30}],
                                                   "lactate": [{"after_rep": 6, "mmol": 2.6}, {"after_rep": 12, "mmol": 1.6}]})
-        self.assertEqual(W.description('20×400 /30"', w["segments"], m, w["lactate"]),
-                         '20×400 /30"\n1-6: Ø 77.0 → 2.6 mmol\n7-12: Ø 76.0 → 1.6 mmol\n13-20: Ø 75.1')
+        self.assertEqual(W.description('20×400 /30s', w["segments"], m, w["lactate"]),
+                         '20×400 /30s\n1-6: Ø 77.0 → 2.6 mmol\n7-12: Ø 76.0 → 1.6 mmol\n13-20: Ø 75.1')
 
     def test_blocks_without_lactate(self):
         w, m, _ = run("laps_20x400_indoor.json", {"segments": [{"reps": 20, "distance_m": 400, "rest_s": 30}]})
