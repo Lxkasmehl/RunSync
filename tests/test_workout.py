@@ -5,6 +5,7 @@ python -m unittest discover tests
 import json
 import os
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -160,6 +161,46 @@ class LactateRows(unittest.TestCase):
         self.assertAlmostEqual(lactate_client.cell_value("pace_s_per_km", 209), 0.1451388888888889)
         self.assertEqual(lactate_client.cell_value("date", "2026-09-04"), 46269)
         self.assertEqual(lactate_client.cell_value("temp_c", None), "")
+
+
+class FakeStrava:
+    def __init__(self, description=None):
+        self.description, self.puts = description, 0
+
+    def get_activity(self, activity_id):
+        return {"id": activity_id, "description": self.description}
+
+    def update_activity(self, activity_id, **fields):
+        self.puts += 1
+        self.description = fields["description"]
+
+
+class StravaDescription(unittest.TestCase):
+    def setUp(self):
+        import sheets_client
+        self.sheets_client, self.tmp = sheets_client, tempfile.TemporaryDirectory()
+        self.old_ledger = sheets_client.LEDGER_FILE
+        sheets_client.LEDGER_FILE = os.path.join(self.tmp.name, "ledger.json")
+
+    def tearDown(self):
+        self.sheets_client.LEDGER_FILE = self.old_ledger
+        self.tmp.cleanup()
+
+    def test_empty_then_replace_own(self):
+        import main_app
+        strava = FakeStrava()
+        self.assertEqual(main_app.set_strava_description(strava, 1, "20×400 /30s"), "set")
+        # A preview correction replaces what RunSync wrote
+        self.assertEqual(main_app.set_strava_description(strava, 1, "20×400 /30s\n1-6: Ø 77.0"), "set")
+        self.assertEqual(main_app.set_strava_description(strava, 1, "20×400 /30s\n1-6: Ø 77.0"), "unchanged")
+        self.assertEqual(strava.puts, 2)
+
+    def test_athletes_text_stays(self):
+        import main_app
+        strava = FakeStrava("Great session with the group")
+        self.assertEqual(main_app.set_strava_description(strava, 1, "70 min easy"), "kept_own")
+        self.assertEqual((strava.description, strava.puts), ("Great session with the group", 0))
+        self.assertTrue(main_app.strava_description_is_own({"id": 1, "description": "Great session with the group"}))
 
 
 if __name__ == "__main__":
