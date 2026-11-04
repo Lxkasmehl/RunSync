@@ -69,6 +69,35 @@ class Matching(unittest.TestCase):
         w = W.normalize({"segments": [{"reps": 6, "distance_m": 1609, "rest_s": 60}]})
         self.assertFalse(W.match_laps(merged, w["segments"])["ok"])
 
+    MILES_AND_FLOATS = [{"reps": 3, "distance_m": 1609, "rest_s": 60}, {"reps": 1, "distance_m": 1609, "rest_s": 180}]
+
+    def test_misheard_rest_falls_back_to_measured(self):
+        # "4×400 mit 200 m Float" sent as rest_s 200: the floats took 51-55 s
+        w, m, _ = run("laps_4xmile_4x400_float.json", {"segments": self.MILES_AND_FLOATS + [
+            {"reps": 4, "distance_m": 400, "rest_s": 200, "rest_type": "Float"}],
+            "lactate": [{"after_rep": 2, "mmol": 1.4}]})
+        self.assertTrue(m["ok"])
+        self.assertEqual(m["rest_ignored"], [2])
+        self.assertEqual([r["time_s"] for r in m["reps"]][4:], [70.7, 72.2, 70.9, 70.5])
+        self.assertTrue(50 <= m["rests_s"][2] <= 56)
+        p = W.preview(w, m, laps("laps_4xmile_4x400_float.json")["laps"], "", [])
+        self.assertEqual(p["rest_ignored"][0]["stated_s"], 200)
+
+    def test_float_sent_as_no_rest_falls_back(self):
+        # rest_s 0 means back-to-back reps, but there were float laps between them
+        w, m, _ = run("laps_4xmile_4x400_float.json", {"segments": self.MILES_AND_FLOATS + [
+            {"reps": 4, "distance_m": 400, "rest_s": 0, "rest_type": "Float"}]})
+        self.assertTrue(m["ok"])
+        self.assertEqual([r["lap"] for r in m["reps"]], [1, 3, 5, 7, 9, 11, 13, 15])
+
+    def test_fitting_rest_is_kept(self):
+        w, m, _ = run("laps_4xmile_4x400_float.json", {"segments": self.MILES_AND_FLOATS + [
+            {"reps": 4, "distance_m": 400, "rest_s": 50, "rest_type": "Float"}],
+            "lactate": [{"after_rep": 6, "mmol": 3.0}]})
+        self.assertEqual(m["rest_ignored"], [])
+        rows = W.lactate_rows(w, m, {"date": "2026-11-04", "session": "AM", "strava_id": 1})
+        self.assertEqual(rows[0]["rest_s"], 50)
+
     def test_bad_input(self):
         with self.assertRaises(W.WorkoutError):
             W.normalize({"segments": [{"reps": 3}]})

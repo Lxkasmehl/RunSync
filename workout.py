@@ -178,6 +178,16 @@ def match_laps(laps, segments):
     """Finds the laps of all reps. Returns {"ok": True, "reps": [...], "rests_s": [...], "ambiguous": bool}
     or {"ok": False, "reason": ...}."""
     candidates = [[p for s in range(len(laps)) if (p := _placement(laps, seg, s))] for seg in segments]
+    # A stated rest that fits no laps is often misheard ("200 m float" as 200 s, "float" as 0):
+    # try again with the rest length unknown and report it, the measured rest then counts
+    rest_ignored = []
+    for k, seg in enumerate(segments):
+        if not candidates[k] and seg["rest_s"] is not None:
+            loose = {**seg, "rest_s": None}
+            if options := [p for s in range(len(laps)) if (p := _placement(laps, loose, s))]:
+                candidates[k] = options
+                segments = segments[:k] + [loose] + segments[k + 1:]
+                rest_ignored.append(k)
     for seg, options in zip(segments, candidates):
         if not options:
             return {"ok": False, "reason": f"no {label(seg, with_reps=True)} in the laps"}
@@ -203,7 +213,7 @@ def match_laps(laps, segments):
                 "distance_m": rep_distance(seg, lap), "watch_distance_m": lap["distance_m"],
                 "hr": lap.get("avg_hr"), "activity": lap.get("activity", 0),
             })
-    return {"ok": True, "reps": reps, "rests_s": rests, "ambiguous": ambiguous,
+    return {"ok": True, "reps": reps, "rests_s": rests, "ambiguous": ambiguous, "rest_ignored": rest_ignored,
             "first_lap": path[0]["start"], "last_lap": path[-1]["end"]}
 
 
@@ -338,7 +348,8 @@ def lactate_rows(workout, match, info):
         seg = segments[seg_index]
         rep = reps[n - 1] if reps else None
         previous = [r["time_s"] / r["distance_m"] * 1000 for r in (reps or [])[:n - 1] if r["distance_m"]]
-        rest = seg["rest_s"] if seg["rest_s"] is not None else (match["rests_s"][seg_index] if reps else None)
+        stated = seg["rest_s"] is not None and seg_index not in (match or {}).get("rest_ignored", [])
+        rest = seg["rest_s"] if stated else (match["rests_s"][seg_index] if reps else None)
         distance = rep["distance_m"] if rep else seg["distance_m"]
         rows.append({
             "date": info["date"], "session": info["session"], "workout_type": workout["workout_type"],
@@ -383,6 +394,9 @@ def preview(workout, match, laps, desc, rows):
               "laps_total": len(laps), "description": desc, "lactate_rows": len(rows)}
     if match and match["ok"]:
         result |= {"first_lap": match["first_lap"] + 1, "last_lap": match["last_lap"] + 1, "ambiguous": match["ambiguous"]}
+        # Segments whose stated rest did not fit: label and measured rest, so the preview can say so
+        result["rest_ignored"] = [{"segment": label(workout["segments"][k], with_reps=True), "stated_s": workout["segments"][k]["rest_s"],
+                                   "measured_s": match["rests_s"][k]} for k in match.get("rest_ignored", [])]
     elif match:
         result |= {"reason": match["reason"], "laps": lap_list(laps)}
     if rows:
