@@ -25,6 +25,10 @@ WORKOUT_TYPES = ["Short Reps", "Long Reps", "Mixed Reps", "Double Threshold - Sh
 SURFACES = ["Track", "Treadmill", "Road", "XC", "Grass", "Trail", "Dirtroad"]
 REST_TYPES = ["Stand", "Jog", "Float"]
 INDOOR_TYPES = ("treadmill_running", "indoor_running", "indoor_track")
+TREADMILL_TYPES = ("treadmill_running", "indoor_running")
+TRACK_TYPES = ("track_running", "indoor_track")
+LONG_REP_S = 240                 # reps of 4 minutes and longer are long reps
+REP_TYPES = ("Short Reps", "Long Reps", "Mixed Reps")
 
 # Matching tolerances
 DISTANCE_RATIO = (0.6, 1.6)      # watch distance / stated distance (indoor tracks measure far too short)
@@ -335,10 +339,32 @@ def shoe_model(name):
     return " ".join(words)
 
 
+def _surface(workout, garmin_type):
+    """Stated surface, else what the watch mode or "indoor" tells (an indoor track is a track); None if unknown."""
+    if workout["surface"]:
+        return workout["surface"]
+    if garmin_type in TREADMILL_TYPES:
+        return "Treadmill"
+    if garmin_type in TRACK_TYPES or workout["indoor"]:
+        return "Track"
+    return None
+
+
+def rep_type(workout_type, times):
+    """Workout type for one lactate test: Short/Long/Mixed Reps from the reps up to the test (what comes after the
+    test does not matter: 4 miles, then 400s, tested during the miles, is Long Reps). Other types stay."""
+    prefix = "Double Threshold - " if (workout_type or "").startswith("Double Threshold - ") else ""
+    base = (workout_type or "")[len(prefix):]
+    if base not in REP_TYPES or not times or any(t is None for t in times):
+        return workout_type
+    kinds = {t >= LONG_REP_S for t in times}
+    return prefix + ("Mixed Reps" if len(kinds) == 2 else "Long Reps" if True in kinds else "Short Reps")
+
+
 def lactate_rows(workout, match, info):
     """One row per lactate test. info: date, session (AM/PM), shoes, weather, garmin_type, strava_id."""
     segments, reps = workout["segments"], (match or {}).get("reps") if (match or {}).get("ok") else None
-    surface = workout["surface"] or ("Treadmill" if info.get("garmin_type") in INDOOR_TYPES else None)
+    surface = _surface(workout, info.get("garmin_type"))
     indoor = workout["indoor"] or surface == "Treadmill" or info.get("garmin_type") in INDOOR_TYPES
     weather = info.get("weather") or {}
     rows = []
@@ -352,7 +378,9 @@ def lactate_rows(workout, match, info):
         rest = seg["rest_s"] if stated else (match["rests_s"][seg_index] if reps else None)
         distance = rep["distance_m"] if rep else seg["distance_m"]
         rows.append({
-            "date": info["date"], "session": info["session"], "workout_type": workout["workout_type"],
+            "date": info["date"], "session": info["session"],
+            "workout_type": rep_type(workout["workout_type"], [r["time_s"] for r in reps[:n]] if reps else
+                                     [segments[_segment_of(segments, i)[0]]["duration_s"] for i in range(1, n + 1)]),
             "rep_dist_m": round(distance) if distance else None,
             "rep_time_s": rep["time_s"] if rep else (seg["duration_s"] or None),
             "pace_s_per_km": round(rep["time_s"] / distance * 1000) if rep and distance else None,
@@ -402,4 +430,7 @@ def preview(workout, match, laps, desc, rows):
     if rows:
         r = rows[0]
         result["sheet"] = {k: r[k] for k in ("workout_type", "surface", "temp_c", "humidity", "rest_s", "rest_type", "shoes")}
+        result["sheet"]["workout_types"] = sorted({row["workout_type"] for row in rows})
+        if not r["surface"]:
+            result["missing"] = ["surface"]
     return result

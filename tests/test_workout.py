@@ -163,6 +163,32 @@ class Preview(unittest.TestCase):
 class LactateRows(unittest.TestCase):
     INFO = {"date": "2026-09-08", "session": "AM", "shoes": "Racing Flat 1", "strava_id": 1}
 
+    MILES_THEN_400S = {"segments": [{"reps": 4, "distance_m": 1609, "rest_s": 60}, {"reps": 4, "distance_m": 400}],
+                       "lactate": [{"after_rep": 2, "mmol": 1.4}, {"after_rep": 4, "mmol": 1.6}, {"after_rep": 6, "mmol": 2.0}],
+                       "workout_type": "Mixed Reps"}
+
+    def test_type_from_the_reps_up_to_the_test(self):
+        # Tests during the miles are Long Reps, the 400s after them don't matter; a test after a 400 is mixed
+        w, m, _ = run("laps_4xmile_4x400_float.json", self.MILES_THEN_400S)
+        rows = W.lactate_rows(w, m, self.INFO | {"garmin_type": "running"})
+        self.assertEqual([r["workout_type"] for r in rows], ["Long Reps", "Long Reps", "Mixed Reps"])
+        self.assertEqual(W.rep_type("Double Threshold - Mixed Reps", [80, 75]), "Double Threshold - Short Reps")
+        self.assertEqual(W.rep_type("Fartlek", [400, 80]), "Fartlek")
+
+    def test_paces_use_the_stated_distance(self):
+        # The watch measured 1666 m for the first mile; the pace uses 1609 m and the watch time (332.3 s)
+        w, m, _ = run("laps_4xmile_4x400_float.json", self.MILES_THEN_400S)
+        row = W.lactate_rows(w, m, self.INFO | {"garmin_type": "running"})[0]
+        self.assertEqual(row["prev_avg"], round(332.3 / 1609 * 1000))
+
+    def test_surface_from_watch_or_missing(self):
+        w, m, _ = run("laps_4xmile_4x400_float.json", self.MILES_THEN_400S)
+        self.assertIsNone(W.lactate_rows(w, m, self.INFO | {"garmin_type": "running"})[0]["surface"])
+        self.assertEqual(W.lactate_rows(w, m, self.INFO | {"garmin_type": "track_running"})[0]["surface"], "Track")
+        p = W.preview(w, m, [], "", W.lactate_rows(w, m, self.INFO | {"garmin_type": "running"}))
+        self.assertEqual(p["missing"], ["surface"])
+        self.assertEqual(p["sheet"]["workout_types"], ["Long Reps", "Mixed Reps"])
+
     def test_outdoor_rows(self):
         w, m, data = run("laps_6x1mile_track.json", {"segments": [{"reps": 6, "distance_m": 1609, "rest_s": 60}],
                                                      "lactate": [{"after_rep": 3, "mmol": 2.5}], "surface": "Track"})

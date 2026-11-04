@@ -387,6 +387,10 @@ def workout_apply(strava_client, garmin_client, strava_ids, workout, what_neutra
     ctx = workout_context(strava_client, garmin_client, strava_ids, workout, what_neutral)
     if not ctx["usable"]:
         raise RunSyncError("workout_not_matched", f"The reps were not found in the laps ({ctx['match']['reason']})")
+    if any(not row["surface"] for row in ctx["rows"]):
+        # The analysis groups by surface, an empty cell is useless: nothing is written until it is known
+        raise RunSyncError("surface_missing", "The lactate sheet needs the surface. Ask the user (Track, Road, Treadmill, XC, "
+                                              "Grass, Trail, Dirtroad), then revise_workout with it and confirm_workout.")
     result = {"strava": [], "description": ctx["description"]}
     for activity in ctx["activities"]:
         text = ctx["description"] if activity is ctx["main"] else what_neutral
