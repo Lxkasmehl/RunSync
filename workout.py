@@ -26,7 +26,6 @@ SURFACES = ["Track", "Treadmill", "Road", "XC", "Grass", "Trail", "Dirtroad"]
 REST_TYPES = ["Stand", "Jog", "Float"]
 INDOOR_TYPES = ("treadmill_running", "indoor_running", "indoor_track")
 TREADMILL_TYPES = ("treadmill_running", "indoor_running")
-TRACK_TYPES = ("track_running", "indoor_track")
 LONG_REP_S = 240                 # reps of 4 minutes and longer are long reps
 REP_TYPES = ("Short Reps", "Long Reps", "Mixed Reps")
 
@@ -340,12 +339,13 @@ def shoe_model(name):
 
 
 def _surface(workout, garmin_type):
-    """Stated surface, else what the watch mode or "indoor" tells (an indoor track is a track); None if unknown."""
+    """Stated surface; an indoor track ("Halle") is a track, the treadmill mode of the watch means treadmill.
+    Otherwise None and the athlete is asked: the watch's track mode is not used reliably enough to go by."""
     if workout["surface"]:
         return workout["surface"]
     if garmin_type in TREADMILL_TYPES:
         return "Treadmill"
-    if garmin_type in TRACK_TYPES or workout["indoor"]:
+    if workout["indoor"]:
         return "Track"
     return None
 

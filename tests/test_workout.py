@@ -184,7 +184,7 @@ class LactateRows(unittest.TestCase):
     def test_surface_from_watch_or_missing(self):
         w, m, _ = run("laps_4xmile_4x400_float.json", self.MILES_THEN_400S)
         self.assertIsNone(W.lactate_rows(w, m, self.INFO | {"garmin_type": "running"})[0]["surface"])
-        self.assertEqual(W.lactate_rows(w, m, self.INFO | {"garmin_type": "track_running"})[0]["surface"], "Track")
+        self.assertIsNone(W.lactate_rows(w, m, self.INFO | {"garmin_type": "track_running"})[0]["surface"])
         p = W.preview(w, m, [], "", W.lactate_rows(w, m, self.INFO | {"garmin_type": "running"}))
         self.assertEqual(p["missing"], ["surface"])
         self.assertEqual(p["sheet"]["workout_types"], ["Long Reps", "Mixed Reps"])
