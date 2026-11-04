@@ -207,6 +207,11 @@ class LactateRows(unittest.TestCase):
     def test_treadmill_defaults(self):
         w, m, data = run("laps_10x3min_treadmill.json", {"segments": [{"reps": 10, "duration_s": 180, "rest_s": 60}],
                                                      "lactate": [{"after_rep": 3, "mmol": 1.7}]})
+        # Treadmill mode alone says nothing about the surface (also used on indoor tracks): asked, not guessed
+        row = W.lactate_rows(w, m, self.INFO | {"weather": {"temp_c": 20}, "garmin_type": data["type"]})[0]
+        self.assertEqual((row["surface"], row["temp_c"]), (None, None))
+        w = W.normalize({"segments": [{"reps": 10, "duration_s": 180, "rest_s": 60}], "lactate": [{"after_rep": 3, "mmol": 1.7}],
+                         "surface": "Treadmill"})
         row = W.lactate_rows(w, m, self.INFO | {"weather": {}, "garmin_type": data["type"]})[0]
         self.assertEqual((row["surface"], row["incline"]), ("Treadmill", 0))
 

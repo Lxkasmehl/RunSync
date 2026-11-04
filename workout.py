@@ -25,7 +25,6 @@ WORKOUT_TYPES = ["Short Reps", "Long Reps", "Mixed Reps", "Double Threshold - Sh
 SURFACES = ["Track", "Treadmill", "Road", "XC", "Grass", "Trail", "Dirtroad"]
 REST_TYPES = ["Stand", "Jog", "Float"]
 INDOOR_TYPES = ("treadmill_running", "indoor_running", "indoor_track")
-TREADMILL_TYPES = ("treadmill_running", "indoor_running")
 LONG_REP_S = 240                 # reps of 4 minutes and longer are long reps
 REP_TYPES = ("Short Reps", "Long Reps", "Mixed Reps")
 
@@ -338,13 +337,11 @@ def shoe_model(name):
     return " ".join(words)
 
 
-def _surface(workout, garmin_type):
-    """Stated surface; an indoor track ("Halle") is a track, the treadmill mode of the watch means treadmill.
-    Otherwise None and the athlete is asked: the watch's track mode is not used reliably enough to go by."""
+def _surface(workout):
+    """Stated surface; an indoor track ("Halle") is a track. Otherwise None and the athlete is asked: the watch mode
+    says too little (treadmill mode is also used on indoor tracks, track mode is not used reliably)."""
     if workout["surface"]:
         return workout["surface"]
-    if garmin_type in TREADMILL_TYPES:
-        return "Treadmill"
     if workout["indoor"]:
         return "Track"
     return None
@@ -364,7 +361,7 @@ def rep_type(workout_type, times):
 def lactate_rows(workout, match, info):
     """One row per lactate test. info: date, session (AM/PM), shoes, weather, garmin_type, strava_id."""
     segments, reps = workout["segments"], (match or {}).get("reps") if (match or {}).get("ok") else None
-    surface = _surface(workout, info.get("garmin_type"))
+    surface = _surface(workout)
     indoor = workout["indoor"] or surface == "Treadmill" or info.get("garmin_type") in INDOOR_TYPES
     weather = info.get("weather") or {}
     rows = []
