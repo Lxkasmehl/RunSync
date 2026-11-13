@@ -80,8 +80,8 @@ On the server it lives in `/data/shoes.json`; `shoes.json` in the repo is only t
 
 ## Operations
 
-- Deploy: commit, then `sh deploy.sh` (copies HEAD to the server and rebuilds the container; the host is
-  `DEPLOY_HOST` in `.env`)
+- Deploy: this repo is a submodule of my private server repo. Push here, then update the submodule pointer there;
+  its CI ships the code to the server and rebuilds the container.
 - Data in the `runsync_data` volume (`/data`): `strava_tokens.json`, `service-account.json`, `ledger.json`, `shoes.json`
 - Credentials in the server's compose `.env`: `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, `SHEET_DOCUMENT_NAME`
 - Re-authorize Strava (e.g. after a revoked token): run `python strava_client.py auth` locally, then copy the new
@@ -93,7 +93,7 @@ On the server it lives in `/data/shoes.json`; `shoes.json` in the repo is only t
 
 ## Local
 
-`.env` with `FILE_PATH` (service account JSON), `DOCUMENT_NAME`, `CLIENT_ID`, `CLIENT_SECRET`, `DEPLOY_HOST`, plus
+`.env` with `FILE_PATH` (service account JSON), `DOCUMENT_NAME`, `CLIENT_ID`, `CLIENT_SECRET`, `DEPLOY_HOST` (only for the token copy above), plus
 `strava_tokens.json`. The Garmin service is only reachable inside the Docker network, so run Garmin tasks on the
 server: `docker compose exec runsync python main_app.py transfer_to_garmin 14`.
 Note: a local `ledger.json` is not the server's one, so run sheet tasks on the server as well.
